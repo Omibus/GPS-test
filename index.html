@@ -39,12 +39,15 @@
     </label>
     <button id="startBtn">Messung starten</button>
     <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
+    <button id="clearBtn" style="background:#888;margin-top:0.5rem;">Clear</button>
     <div class="speed" id="acceleration">Verzögerung: 0 m/s²</div>
     <div class="status" id="status"></div>
     <div class="result" id="result"></div>
+    <div class="result" id="resultsList"></div>
   </div>
   <script>
     let measuring = false;
+    let waitingForDecel = false;
     let startTime = null;
     let stopTime = null;
     let decelThreshold = 2;
@@ -55,12 +58,14 @@
     let distance = 0;
     let lastSpeed = 0;
     let watchId = null;
+    let results = [];
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
       stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
       direction = document.getElementById('direction').value;
       measuring = false;
+      waitingForDecel = true;
       startTime = null;
       stopTime = null;
       distance = 0;
@@ -68,6 +73,36 @@
       document.getElementById('status').innerHTML = 'Warte auf Verzögerung...';
       document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
     };
+
+    document.getElementById('stopBtn').onclick = function() {
+      measuring = false;
+      waitingForDecel = false;
+      startTime = null;
+      stopTime = null;
+      distance = 0;
+      document.getElementById('result').innerHTML = '';
+      document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.';
+      document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+    };
+
+    document.getElementById('clearBtn').onclick = function() {
+      results = [];
+      updateResultsList();
+    };
+
+    function updateResultsList() {
+      const listDiv = document.getElementById('resultsList');
+      if (results.length === 0) {
+        listDiv.innerHTML = '';
+        return;
+      }
+      let html = '<b>Messungen:</b><ul style="padding-left:1em;">';
+      results.forEach((r, i) => {
+        html += `<li>Nr. ${i+1}: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Bremsweg: ${r.distance}m</li>`;
+      });
+      html += '</ul>';
+      listDiv.innerHTML = html;
+    }
 
     document.getElementById('stopBtn').onclick = function() {
       measuring = false;
@@ -104,8 +139,9 @@
       let a = acc[direction] || 0;
       document.getElementById('acceleration').innerHTML = `Verzögerung: ${a.toFixed(2)} m/s²`;
       // Echtzeit-Update der Verzögerung
-      if (!measuring && Math.abs(a) >= decelThreshold) {
+      if (waitingForDecel && Math.abs(a) >= decelThreshold) {
         measuring = true;
+        waitingForDecel = false;
         startTime = performance.now();
         startSpeed = currentSpeed;
         document.getElementById('status').innerHTML = 'Messung läuft...';
@@ -128,6 +164,16 @@
           document.getElementById('result').innerHTML =
             `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+          // Ergebnis speichern und anzeigen
+          results.push({
+            time: time,
+            startSpeed: startSpeed.toFixed(2),
+            distance: distance.toFixed(2)
+          });
+          updateResultsList();
+          // App zurücksetzen für neue Messung
+          waitingForDecel = false;
+          measuring = false;
         }
       }
     });
