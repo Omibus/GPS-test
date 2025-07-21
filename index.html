@@ -1,0 +1,136 @@
+
+
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Bremsweg-Messung Mobil</title>
+  <style>
+    body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; margin: 0; }
+    .container { max-width: 400px; margin: 2rem auto; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; }
+    h1 { text-align: center; }
+    label { display: block; margin-top: 1rem; }
+    input, select { width: 100%; padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.5rem; border: 1px solid #ccc; }
+    button { margin-top: 1.5rem; width: 100%; padding: 1rem; border: none; border-radius: 0.5rem; background: #4cd137; color: #fff; font-size: 1.2rem; cursor: pointer; }
+    button:disabled { background: #aaa; }
+    .result { margin-top: 2rem; background: #f0f0f0; padding: 1rem; border-radius: 0.5rem; }
+    .status { margin-top: 1rem; color: #888; font-size: 0.9rem; }
+    .speed { font-size: 1.2rem; margin-top: 1rem; text-align: center; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Bremsweg-Messung</h1>
+    <div class="speed" id="speed">Geschwindigkeit: 0 m/s</div>
+    <div class="speed" id="gps">GPS: - / -</div>
+    <label>Schwellenwert Verzögerung (m/s²):
+      <input type="number" id="decelThreshold" value="2" min="0" step="0.1">
+    </label>
+    <label>Richtung (X, Y, Z):
+      <select id="direction">
+        <option value="x">X</option>
+        <option value="y">Y</option>
+        <option value="z">Z</option>
+      </select>
+    </label>
+    <label>Schwellenwert Stillstand (m/s²):
+      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01">
+    </label>
+    <button id="startBtn">Messung starten</button>
+    <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
+    <div class="speed" id="acceleration">Verzögerung: 0 m/s²</div>
+    <div class="status" id="status"></div>
+    <div class="result" id="result"></div>
+  </div>
+  <script>
+    let measuring = false;
+    let startTime = null;
+    let stopTime = null;
+    let decelThreshold = 2;
+    let stopThreshold = 0.3;
+    let direction = 'x';
+    let startSpeed = 0;
+    let currentSpeed = 0;
+    let distance = 0;
+    let lastSpeed = 0;
+    let watchId = null;
+
+    document.getElementById('startBtn').onclick = function() {
+      decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
+      stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
+      direction = document.getElementById('direction').value;
+      measuring = false;
+      startTime = null;
+      stopTime = null;
+      distance = 0;
+      document.getElementById('result').innerHTML = '';
+      document.getElementById('status').innerHTML = 'Warte auf Verzögerung...';
+      document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+    };
+
+    document.getElementById('stopBtn').onclick = function() {
+      measuring = false;
+      startTime = null;
+      stopTime = null;
+      distance = 0;
+      document.getElementById('result').innerHTML = '';
+      document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.';
+      document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+    };
+
+    // GPS Geschwindigkeit und Position
+    if ('geolocation' in navigator) {
+      watchId = navigator.geolocation.watchPosition(function(pos) {
+        if (pos.coords.speed != null) {
+          currentSpeed = Math.max(0, pos.coords.speed);
+          document.getElementById('speed').innerHTML = `Geschwindigkeit: ${currentSpeed.toFixed(2)} m/s`;
+        }
+        if (pos.coords.latitude != null && pos.coords.longitude != null) {
+          document.getElementById('gps').innerHTML = `GPS: ${pos.coords.latitude.toFixed(6)} / ${pos.coords.longitude.toFixed(6)}`;
+        }
+      }, function(err) {
+        document.getElementById('speed').innerHTML = 'GPS nicht verfügbar';
+        document.getElementById('gps').innerHTML = 'GPS: - / -';
+      }, { enableHighAccuracy: true, maximumAge: 1000 });
+    } else {
+      document.getElementById('speed').innerHTML = 'GPS nicht verfügbar';
+      document.getElementById('gps').innerHTML = 'GPS: - / -';
+    }
+
+    window.addEventListener('devicemotion', function(event) {
+      let acc = event.acceleration;
+      if (!acc) return;
+      let a = acc[direction] || 0;
+      document.getElementById('acceleration').innerHTML = `Verzögerung: ${a.toFixed(2)} m/s²`;
+      // Echtzeit-Update der Verzögerung
+      if (!measuring && Math.abs(a) >= decelThreshold) {
+        measuring = true;
+        startTime = performance.now();
+        startSpeed = currentSpeed;
+        document.getElementById('status').innerHTML = 'Messung läuft...';
+      }
+      if (measuring) {
+        let dt = event.interval ? event.interval / 1000 : 0.02;
+        startSpeed = startSpeed || currentSpeed;
+        startSpeed = Math.max(0, startSpeed);
+        startSpeed = isNaN(startSpeed) ? 0 : startSpeed;
+        startSpeed = Math.max(startSpeed, 0);
+        startSpeed = Math.min(startSpeed, 100);
+        startSpeed = parseFloat(startSpeed);
+        currentSpeed -= Math.abs(a) * dt;
+        if (currentSpeed < 0) currentSpeed = 0;
+        distance += currentSpeed * dt;
+        if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold) {
+          measuring = false;
+          stopTime = performance.now();
+          let time = ((stopTime - startTime) / 1000).toFixed(2);
+          document.getElementById('result').innerHTML =
+            `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s`;
+          document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+        }
+      }
+    });
+  </script>
+</body>
+</html>
