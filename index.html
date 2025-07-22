@@ -113,6 +113,38 @@ let plotPNGs = []; // Für Anzeige der Historie
       updateResultsList();
     };
 
+    function calcNormBremsweg(accHistory, startSpeed, bremszeit) {
+  // 1. Normiere die Verzögerungskurve so, dass die Geschwindigkeit am Ende 0 ist
+  // 2. Integriere die Geschwindigkeit über die Zeit für den Bremsweg
+  let n = accHistory.length;
+  if (n < 2) return 0;
+  // Zeitdifferenzen und Roh-Integral der Verzögerung
+  let v = [parseFloat(startSpeed)];
+  let t0 = accHistory[0].t;
+  let tN = accHistory[n-1].t;
+  let dtSum = 0;
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    dtSum += dt;
+    v[i] = v[i-1] - accHistory[i].a * dt; // Roh-Geschwindigkeit
+  }
+  // Normierungsfaktor berechnen, damit v[n-1] = 0
+  let norm = v[n-1] !== 0 ? v[0] / (v[0] - v[n-1]) : 1;
+  // Normierte Verzögerungskurve
+  let vNorm = [v[0]];
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    vNorm[i] = vNorm[i-1] - accHistory[i].a * norm * dt;
+  }
+  // Bremsweg als Integral der normierten Geschwindigkeit
+  let s = 0;
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    s += (vNorm[i-1] + vNorm[i]) / 2 * dt;
+  }
+  return s;
+}
+
     function updateResultsList() {
       const listDiv = document.getElementById('resultsList');
       if (results.length === 0) {
@@ -125,6 +157,7 @@ let plotPNGs = []; // Für Anzeige der Historie
     html += `<b>Nr. ${i+1}</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Bremsweg: ${r.distance}m`;
     html += `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${r.vergleichsweg} m</span>`;
     html += `<br>Mittlere Verzögerung: ${r.meanA} m/s²`;
+    html += `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${r.normBremsweg} m</span>`;
     if (plotPNGs[i]) {
       html += `<br><img src='${plotPNGs[i]}' style='width:320px;border:1px solid #ccc;margin-top:0.5em;'>`;
     }
@@ -240,10 +273,13 @@ let plotPNGs = []; // Für Anzeige der Historie
           }
           // Vergleichsbremsweg bei konstanter Verzögerung
           let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
+          // Alternative Methode: normierte Verzögerungskurve
+          let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
           document.getElementById('result').innerHTML =
             `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
             `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-            `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>`;
+            `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+            `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
           // Plot anzeigen und PNG für Historie erzeugen
           let png = showAccPlot(accHistory, true);
@@ -256,7 +292,8 @@ let plotPNGs = []; // Für Anzeige der Historie
             startSpeed: startSpeed.toFixed(2),
             distance: distance.toFixed(2),
             vergleichsweg: vergleichsweg.toFixed(2),
-            meanA: meanA.toFixed(2)
+            meanA: meanA.toFixed(2),
+            normBremsweg: normBremsweg.toFixed(2)
           });
           updateResultsList();
           // App zurücksetzen für neue Messung
@@ -341,9 +378,9 @@ function loadSheetJS(cb) {
 document.getElementById('exportBtn').onclick = function() {
   loadSheetJS(function() {
     let wb = XLSX.utils.book_new();
-    let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)']];
+    let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)','Bremsweg (normierte Kurve)']];
     results.forEach((r,i)=>{
-      ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA]);
+      ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA, r.normBremsweg]);
     });
     let ws = XLSX.utils.aoa_to_sheet(ws_data);
     XLSX.utils.book_append_sheet(wb, ws, 'Messungen');
