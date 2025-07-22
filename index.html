@@ -27,13 +27,17 @@
     <label>Schwellenwert Verzögerung (m/s²):
       <input type="number" id="decelThreshold" value="2" min="0" step="0.1">
     </label>
-    <label>Richtung (X, Y, Z, Betrag):
+    <label>Richtung (X, Y, Z, Betrag, Y nach vorn geneigt):
       <select id="direction">
         <option value="x">X</option>
         <option value="y">Y</option>
         <option value="z">Z</option>
         <option value="betrag">Betrag</option>
+        <option value="y_neigung">Y nach vorn geneigt</option>
       </select>
+    </label>
+    <label id="neigungLabel" style="display:none;">Neigungswinkel (°):
+      <input type="number" id="neigung" value="0" min="-90" max="90" step="0.1">
     </label>
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
@@ -82,6 +86,7 @@
 
     document.getElementById('direction').onchange = function() {
       direction = document.getElementById('direction').value;
+      document.getElementById('neigungLabel').style.display = (direction === 'y_neigung') ? 'block' : 'none';
     };
     document.getElementById('gravityToggle').onchange = function() {
       useGravity = document.getElementById('gravityToggle').checked;
@@ -156,6 +161,11 @@
           Math.pow(acc.y || 0, 2) +
           Math.pow(acc.z || 0, 2)
         );
+      } else if (direction === 'y_neigung') {
+        let winkel = parseFloat(document.getElementById('neigung').value) || 0;
+        let rad = winkel * Math.PI / 180;
+        // y' = y * cos(rad) - z * sin(rad)
+        a = (acc.y || 0) * Math.cos(rad) - (acc.z || 0) * Math.sin(rad);
       } else {
         a = acc[direction] || 0;
       }
