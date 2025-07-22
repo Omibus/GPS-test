@@ -54,6 +54,7 @@
     <div class="status" id="status"></div>
     <div class="result" id="result"></div>
     <div class="result" id="resultsList"></div>
+    <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
   </div>
   <script>
     let measuring = false;
@@ -71,6 +72,7 @@
     let watchId = null;
     let results = [];
 let accHistory = []; // Für Plot und Mittelwert
+let plotPNGs = []; // Für Export
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -118,12 +120,18 @@ let accHistory = []; // Für Plot und Mittelwert
         listDiv.innerHTML = '';
         return;
       }
-      let html = '<b>Messungen:</b><ul style="padding-left:1em;">';
-      results.forEach((r, i) => {
-        html += `<li>Nr. ${i+1}: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Bremsweg: ${r.distance}m</li>`;
-      });
-      html += '</ul>';
-      listDiv.innerHTML = html;
+  let html = '<b>Messungen:</b>';
+  results.forEach((r, i) => {
+    html += `<div style='margin-bottom:1.5em;padding:0.5em;background:#f8f8f8;border-radius:0.5em;'>`;
+    html += `<b>Nr. ${i+1}</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Bremsweg: ${r.distance}m`;
+    html += `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${r.vergleichsweg} m</span>`;
+    html += `<br>Mittlere Verzögerung: ${r.meanA} m/s²`;
+    if (plotPNGs[i]) {
+      html += `<br><img src='${plotPNGs[i]}' style='width:320px;border:1px solid #ccc;margin-top:0.5em;'>`;
+    }
+    html += `</div>`;
+  });
+  listDiv.innerHTML = html;
     }
 
     document.getElementById('stopBtn').onclick = function() {
@@ -243,10 +251,13 @@ let accHistory = []; // Für Plot und Mittelwert
             time: time,
             startSpeed: startSpeed.toFixed(2),
             distance: distance.toFixed(2)
+            , vergleichsweg: vergleichsweg.toFixed(2)
+            , meanA: meanA.toFixed(2)
           });
           updateResultsList();
-          // Plot anzeigen
-          showAccPlot(accHistory);
+          // Plot anzeigen und PNG für Übersicht/Export speichern
+          let png = showAccPlot(accHistory, true);
+          plotPNGs.push(png);
           // App zurücksetzen für neue Messung
           waitingForDecel = false;
           measuring = false;
@@ -255,9 +266,9 @@ let accHistory = []; // Für Plot und Mittelwert
     });
 
 // Plot-Funktion für Verzögerung über Zeit
-function showAccPlot(data) {
+function showAccPlot(data, returnPNG=false) {
   let plotDiv = document.getElementById('result');
-  let w = 350, h = 120, pad = 30;
+  let w = 320, h = 140, pad = 40;
   let canvas = document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
@@ -265,12 +276,24 @@ function showAccPlot(data) {
   let ctx = canvas.getContext('2d');
   // Achsen
   ctx.strokeStyle = '#888';
+  ctx.lineWidth = 1.2;
   ctx.beginPath();
   ctx.moveTo(pad, h-pad);
   ctx.lineTo(w-pad, h-pad);
   ctx.moveTo(pad, h-pad);
   ctx.lineTo(pad, pad);
   ctx.stroke();
+  // Achsenbeschriftungen
+  ctx.fillStyle = '#222';
+  ctx.font = '14px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Zeit (s)', w/2, h-10);
+  ctx.save();
+  ctx.translate(15, h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center';
+  ctx.fillText('Verzögerung (m/s²)', 0, 0);
+  ctx.restore();
   // Wertebereich
   let tmax = data[data.length-1].t;
   let amin = Math.min(...data.map(d=>d.a));
@@ -278,6 +301,7 @@ function showAccPlot(data) {
   if (amin === amax) { amin -= 1; amax += 1; }
   // Plot
   ctx.strokeStyle = '#e84118';
+  ctx.lineWidth = 2;
   ctx.beginPath();
   for (let i=0; i<data.length; i++) {
     let x = pad + (w-2*pad) * (data[i].t/tmax);
@@ -286,17 +310,50 @@ function showAccPlot(data) {
     else ctx.lineTo(x,y);
   }
   ctx.stroke();
-  // Beschriftung
-  ctx.fillStyle = '#222';
+  // Y-Achse Werte
+  ctx.fillStyle = '#444';
   ctx.font = '12px Segoe UI';
-  ctx.fillText('Zeit (s)', w/2-20, h-5);
-  ctx.save();
-  ctx.translate(10, h/2+20);
-  ctx.rotate(-Math.PI/2);
-  ctx.fillText('Verzögerung (m/s²)', 0, 0);
-  ctx.restore();
-  plotDiv.appendChild(canvas);
+  ctx.textAlign = 'right';
+  ctx.fillText(amin.toFixed(1), pad-5, h-pad);
+  ctx.fillText(amax.toFixed(1), pad-5, pad+5);
+  // X-Achse Werte
+  ctx.textAlign = 'center';
+  ctx.fillText('0', pad, h-pad+15);
+  ctx.fillText(tmax.toFixed(2), w-pad, h-pad+15);
+  if (!returnPNG) {
+    plotDiv.appendChild(canvas);
+    return;
+  } else {
+    return canvas.toDataURL('image/png');
+  }
 }
+// SheetJS für Excel-Export einbinden
+let sheetjsLoaded = false;
+function loadSheetJS(cb) {
+  if (sheetjsLoaded) { cb(); return; }
+  let script = document.createElement('script');
+  script.src = 'https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js';
+  script.onload = function() { sheetjsLoaded = true; cb(); };
+  document.body.appendChild(script);
+}
+
+document.getElementById('exportBtn').onclick = function() {
+  loadSheetJS(function() {
+    let wb = XLSX.utils.book_new();
+    let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)']];
+    results.forEach((r,i)=>{
+      ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA]);
+    });
+    let ws = XLSX.utils.aoa_to_sheet(ws_data);
+    XLSX.utils.book_append_sheet(wb, ws, 'Messungen');
+    // PNGs als weitere Sheets
+    plotPNGs.forEach((png,i)=>{
+      let imgSheet = XLSX.utils.aoa_to_sheet([[`Messung Nr. ${i+1}`],[{t:'s',v:'',l:{Target:png}}]]);
+      XLSX.utils.book_append_sheet(wb, imgSheet, `Plot${i+1}`);
+    });
+    XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
+  });
+};
   </script>
 </body>
 </html>
