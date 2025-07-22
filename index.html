@@ -27,9 +27,14 @@
       <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
     </div>
     <label style="display:flex;align-items:center;gap:0.5em;">Schwellenwert Verzögerung (m/s²):
-      <button id="decelLeft" type="button" style="padding:0.2em 0.5em;">&#8592;</button>
-      <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;">
-      <button id="decelRight" type="button" style="padding:0.2em 0.5em;">&#8594;</button>
+      <button id="decelLeft" type="button" style="padding:0.2em 0.3em;min-width:28px;">&#8592;</button>
+      <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;min-width:60px;">
+      <button id="decelRight" type="button" style="padding:0.2em 0.3em;min-width:28px;">&#8594;</button>
+    </label>
+    <label style="display:flex;align-items:center;gap:0.5em;margin-top:0.5em;">Schwellenwert Stillstand (m/s²):
+      <button id="stopLeft" type="button" style="padding:0.2em 0.3em;min-width:28px;">&#8592;</button>
+      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;min-width:60px;">
+      <button id="stopRight" type="button" style="padding:0.2em 0.3em;min-width:28px;">&#8594;</button>
     </label>
     <label>Richtung (X, Y, Z, Betrag):
       <select id="direction">
@@ -45,11 +50,6 @@
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
       Mit Gravitation messen
-    </label>
-    <label style="display:flex;align-items:center;gap:0.5em;">Schwellenwert Stillstand (m/s²):
-      <button id="stopLeft" type="button" style="padding:0.2em 0.5em;">&#8592;</button>
-      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;">
-      <button id="stopRight" type="button" style="padding:0.2em 0.5em;">&#8594;</button>
     </label>
     <button id="startBtn">Messung starten</button>
     <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
