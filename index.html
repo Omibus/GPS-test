@@ -27,18 +27,19 @@
     <label>Schwellenwert Verzögerung (m/s²):
       <input type="number" id="decelThreshold" value="2" min="0" step="0.1">
     </label>
-    <label>Richtung (X, Y, Z, Betrag, Y nach vorn geneigt):
+    <label>Richtung (X, Y, Z, Betrag):
       <select id="direction">
         <option value="x">X</option>
         <option value="y">Y</option>
         <option value="z">Z</option>
         <option value="betrag">Betrag</option>
-        <option value="y_neigung">Y nach vorn geneigt</option>
       </select>
     </label>
-    <label id="neigungLabel" style="display:none;">Neigungswinkel (°):
-      <input type="number" id="neigung" value="0" min="-90" max="90" step="0.1">
-    </label>
+    <div style="margin-top:0.5rem;">
+      <label>Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
+      <label>Verdrehwinkel um Y (°): <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1"></label>
+      <label>Verdrehwinkel um Z (°): <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1"></label>
+    </div>
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
       Mit Gravitation messen
@@ -86,7 +87,9 @@
 
     document.getElementById('direction').onchange = function() {
       direction = document.getElementById('direction').value;
-      document.getElementById('neigungLabel').style.display = (direction === 'y_neigung') ? 'block' : 'none';
+    };
+    document.getElementById('winkelX').oninput = document.getElementById('winkelY').oninput = document.getElementById('winkelZ').oninput = function() {
+      // Trigger Echtzeit-Update
     };
     document.getElementById('gravityToggle').onchange = function() {
       useGravity = document.getElementById('gravityToggle').checked;
@@ -151,23 +154,42 @@
       document.getElementById('gps').innerHTML = 'GPS: - / -';
     }
 
+    function rotateVector(x, y, z, wx, wy, wz) {
+      // Rotationsmatrizen für x, y, z
+      let radX = wx * Math.PI / 180;
+      let radY = wy * Math.PI / 180;
+      let radZ = wz * Math.PI / 180;
+      // Rotation um X
+      let y1 = y * Math.cos(radX) - z * Math.sin(radX);
+      let z1 = y * Math.sin(radX) + z * Math.cos(radX);
+      let x1 = x;
+      // Rotation um Y
+      let x2 = x1 * Math.cos(radY) + z1 * Math.sin(radY);
+      let z2 = -x1 * Math.sin(radY) + z1 * Math.cos(radY);
+      let y2 = y1;
+      // Rotation um Z
+      let x3 = x2 * Math.cos(radZ) - y2 * Math.sin(radZ);
+      let y3 = x2 * Math.sin(radZ) + y2 * Math.cos(radZ);
+      let z3 = z2;
+      return {x: x3, y: y3, z: z3};
+    }
+
     window.addEventListener('devicemotion', function(event) {
       let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
       if (!acc) return;
+      let wx = parseFloat(document.getElementById('winkelX').value) || 0;
+      let wy = parseFloat(document.getElementById('winkelY').value) || 0;
+      let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
+      let vec = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wx, wy, wz);
       let a = 0;
       if (direction === 'betrag') {
         a = Math.sqrt(
-          Math.pow(acc.x || 0, 2) +
-          Math.pow(acc.y || 0, 2) +
-          Math.pow(acc.z || 0, 2)
+          Math.pow(vec.x, 2) +
+          Math.pow(vec.y, 2) +
+          Math.pow(vec.z, 2)
         );
-      } else if (direction === 'y_neigung') {
-        let winkel = parseFloat(document.getElementById('neigung').value) || 0;
-        let rad = winkel * Math.PI / 180;
-        // y' = y * cos(rad) - z * sin(rad)
-        a = (acc.y || 0) * Math.cos(rad) - (acc.z || 0) * Math.sin(rad);
       } else {
-        a = acc[direction] || 0;
+        a = vec[direction] || 0;
       }
       document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
       // Echtzeit-Update der Verzögerung
