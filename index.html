@@ -34,9 +34,10 @@
       </select>
     </label>
     <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
-      <label style="flex:1;">Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
-      <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">Kalibrieren</button>
+      <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. X</button>
+      <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
     </div>
+    <label>Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
     <label>Verdrehwinkel um Y (°): <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1"></label>
     <label>Verdrehwinkel um Z (°): <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1"></label>
     </div>
@@ -417,14 +418,90 @@ document.getElementById('calibBtn').onclick = function() {
   }
   // Winkel zur Z-Achse (in Grad)
   let winkelX = Math.acos(az/g) * 180 / Math.PI;
-  // Vorzeichen: Wenn ax negativ, dann negativ
   if (ax < 0) winkelX = -winkelX;
   document.getElementById('winkelX').value = winkelX.toFixed(1);
+};
+
+// Kalibrierung break
+let breakCalibState = null;
+let breakAccs = [];
+let breakGravAccs = [];
+let breakTimeout = null;
+document.getElementById('calibBreakBtn').onclick = function() {
+  if (breakCalibState) return;
+  breakCalibState = 'waitForAccel';
+  breakAccs = [];
+  breakGravAccs = [];
+  document.getElementById('status').innerHTML = 'Warte auf Bremsbeschleunigung (>2 m/s²)...';
 };
 
 window.lastAccInclGrav = null;
 window.addEventListener('devicemotion', function(event) {
   window.lastAccInclGrav = event.accelerationIncludingGravity;
+  // Kalibrierung break
+  if (breakCalibState === 'waitForAccel') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    let aVec = [acc.x||0, acc.y||0, acc.z||0];
+    let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
+    if (aMag > 2) {
+      breakCalibState = 'measureAccel';
+      breakAccs = [];
+      document.getElementById('status').innerHTML = 'Messe Bremsrichtung...';
+      breakTimeout = setTimeout(function(){
+        breakCalibState = 'waitForStill';
+        breakGravAccs = [];
+        document.getElementById('status').innerHTML = 'Warte auf Stillstand (<0.2 m/s² für 2s)...';
+        breakTimeout = null;
+      }, 500);
+    }
+  }
+  if (breakCalibState === 'measureAccel') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    breakAccs.push([acc.x||0, acc.y||0, acc.z||0]);
+  }
+  if (breakCalibState === 'waitForStill') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    let aVec = [acc.x||0, acc.y||0, acc.z||0];
+    let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
+    if (aMag < 0.2) {
+      breakGravAccs.push(window.lastAccInclGrav ? [window.lastAccInclGrav.x||0, window.lastAccInclGrav.y||0, window.lastAccInclGrav.z||0] : [0,0,0]);
+      if (breakGravAccs.length > 40) { // ca. 2s bei 20Hz
+        breakCalibState = 'done';
+        // Mittelwerte berechnen
+        let avgAccel = [0,0,0];
+        breakAccs.forEach(v=>{avgAccel[0]+=v[0];avgAccel[1]+=v[1];avgAccel[2]+=v[2];});
+        avgAccel = avgAccel.map(x=>x/(breakAccs.length||1));
+        let avgGrav = [0,0,0];
+        breakGravAccs.forEach(v=>{avgGrav[0]+=v[0];avgGrav[1]+=v[1];avgGrav[2]+=v[2];});
+        avgGrav = avgGrav.map(x=>x/(breakGravAccs.length||1));
+        // Normiere Vektoren
+        let norm = v => { let m=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]); return m>0?[v[0]/m,v[1]/m,v[2]/m]:[0,0,1]; };
+        let yAxis = norm(avgAccel);
+        let zAxis = norm(avgGrav);
+        // Berechne Rotationsmatrix, dann Euler-Winkel
+        // x-Achse = y x z
+        let xAxis = [yAxis[1]*zAxis[2]-yAxis[2]*zAxis[1], yAxis[2]*zAxis[0]-yAxis[0]*zAxis[2], yAxis[0]*zAxis[1]-yAxis[1]*zAxis[0]];
+        // Rotation aus Basisvektoren
+        // ZYX-Konvention
+        let wx = Math.atan2(-yAxis[2],zAxis[2])*180/Math.PI;
+        let wy = Math.atan2(xAxis[2],Math.sqrt(xAxis[0]*xAxis[0]+xAxis[1]*xAxis[1]))*180/Math.PI;
+        let wz = Math.atan2(yAxis[0],yAxis[1])*180/Math.PI;
+        document.getElementById('winkelX').value = wx.toFixed(1);
+        document.getElementById('winkelY').value = wy.toFixed(1);
+        document.getElementById('winkelZ').value = wz.toFixed(1);
+        document.getElementById('status').innerHTML = 'Kalibrierung abgeschlossen.';
+        breakCalibState = null;
+        breakAccs = [];
+        breakGravAccs = [];
+        if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
+      }
+    } else {
+      breakGravAccs = [];
+    }
+  }
 });
   </script>
 </body>
