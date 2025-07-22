@@ -72,7 +72,7 @@
     let watchId = null;
     let results = [];
 let accHistory = []; // Für Plot und Mittelwert
-let plotPNGs = []; // Für Export
+let accHistories = []; // Für Excel-Export
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -246,9 +246,10 @@ let plotPNGs = []; // Für Export
             `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
             `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-          // Plot anzeigen und PNG für Übersicht/Export speichern
-          let png = showAccPlot(accHistory, true);
-          plotPNGs.push(png);
+          // Plot anzeigen
+          showAccPlot(accHistory, false);
+          // Messwerte für Excel speichern
+          accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
           // Ergebnis speichern und anzeigen
           results.push({
             time: time,
@@ -346,10 +347,14 @@ document.getElementById('exportBtn').onclick = function() {
     });
     let ws = XLSX.utils.aoa_to_sheet(ws_data);
     XLSX.utils.book_append_sheet(wb, ws, 'Messungen');
-    // PNGs als weitere Sheets
-    plotPNGs.forEach((png,i)=>{
-      let imgSheet = XLSX.utils.aoa_to_sheet([[`Messung Nr. ${i+1}`],[{t:'s',v:'',l:{Target:png}}]]);
-      XLSX.utils.book_append_sheet(wb, imgSheet, `Plot${i+1}`);
+    // Messwerte als weitere Sheets
+    accHistories.forEach((hist,i)=>{
+      let plotData = [['Zeit (s)','Verzögerung (m/s²)']];
+      hist.forEach(d=>{
+        plotData.push([d.t.toFixed(3), d.a.toFixed(3)]);
+      });
+      let plotSheet = XLSX.utils.aoa_to_sheet(plotData);
+      XLSX.utils.book_append_sheet(wb, plotSheet, `Plot${i+1}`);
     });
     XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
   });
