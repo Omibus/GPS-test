@@ -6,7 +6,7 @@
   <title>Bremsweg-Messung Mobil</title>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; margin: 0; }
-    .container { max-width: 400px; margin: 2rem auto; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; }
+    .container { max-width: 400px; margin: 2rem auto; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; padding-left:2rem; padding-right:2rem; }
     h1 { text-align: center; }
     label { display: block; margin-top: 1rem; }
     input, select { width: 100%; padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.5rem; border: 1px solid #ccc; }
@@ -22,8 +22,14 @@
     <h1>Bremsweg-Messung</h1>
     <div class="speed" id="speed">Geschwindigkeit: 0 m/s</div>
     <div class="speed" id="gps">GPS: - / -</div>
-    <label>Schwellenwert Verzögerung (m/s²):
-      <input type="number" id="decelThreshold" value="2" min="0" step="0.1">
+    <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
+      <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. grav.</button>
+      <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
+    </div>
+    <label style="display:flex;align-items:center;gap:0.5em;">Schwellenwert Verzögerung (m/s²):
+      <button id="decelLeft" type="button" style="padding:0.2em 0.5em;">&#8592;</button>
+      <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;">
+      <button id="decelRight" type="button" style="padding:0.2em 0.5em;">&#8594;</button>
     </label>
     <label>Richtung (X, Y, Z, Betrag):
       <select id="direction">
@@ -33,20 +39,17 @@
         <option value="betrag">Betrag</option>
       </select>
     </label>
-    <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
-      <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. X</button>
-      <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
-    </div>
     <label>Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
     <label>Verdrehwinkel um Y (°): <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1"></label>
     <label>Verdrehwinkel um Z (°): <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1"></label>
-    </div>
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
       Mit Gravitation messen
     </label>
-    <label>Schwellenwert Stillstand (m/s²):
-      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01">
+    <label style="display:flex;align-items:center;gap:0.5em;">Schwellenwert Stillstand (m/s²):
+      <button id="stopLeft" type="button" style="padding:0.2em 0.5em;">&#8592;</button>
+      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;">
+      <button id="stopRight" type="button" style="padding:0.2em 0.5em;">&#8594;</button>
     </label>
     <button id="startBtn">Messung starten</button>
     <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
@@ -421,18 +424,15 @@ document.getElementById('calibBtn').onclick = function() {
   if (ax < 0) winkelX = -winkelX;
   document.getElementById('winkelX').value = winkelX.toFixed(1);
 };
-
-// Kalibrierung break
-let breakCalibState = null;
-let breakAccs = [];
-let breakGravAccs = [];
-let breakTimeout = null;
 document.getElementById('calibBreakBtn').onclick = function() {
   if (breakCalibState) return;
   breakCalibState = 'waitForAccel';
   breakAccs = [];
   breakGravAccs = [];
-  document.getElementById('status').innerHTML = 'Warte auf Bremsbeschleunigung (>2 m/s²)...';
+  // Schwellenwerte aus den Eingabefeldern holen
+  window.breakDecelThreshold = parseFloat(document.getElementById('decelThreshold').value) || 2;
+  window.breakStopThreshold = parseFloat(document.getElementById('stopThreshold').value) || 0.3;
+  document.getElementById('status').innerHTML = `Warte auf Bremsbeschleunigung (>${window.breakDecelThreshold} m/s²)...`;
 };
 
 window.lastAccInclGrav = null;
@@ -444,29 +444,24 @@ window.addEventListener('devicemotion', function(event) {
     if (!acc) return;
     let aVec = [acc.x||0, acc.y||0, acc.z||0];
     let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
-    if (aMag > 2) {
+    if (aMag > (window.breakDecelThreshold || 2)) {
       breakCalibState = 'measureAccel';
       breakAccs = [];
       document.getElementById('status').innerHTML = 'Messe Bremsrichtung...';
       breakTimeout = setTimeout(function(){
         breakCalibState = 'waitForStill';
         breakGravAccs = [];
-        document.getElementById('status').innerHTML = 'Warte auf Stillstand (<0.2 m/s² für 2s)...';
+        document.getElementById('status').innerHTML = `Warte auf Stillstand (<${window.breakStopThreshold || 0.2} m/s² für 2s)...`;
         breakTimeout = null;
       }, 500);
     }
-  }
-  if (breakCalibState === 'measureAccel') {
-    let acc = event.acceleration;
-    if (!acc) return;
-    breakAccs.push([acc.x||0, acc.y||0, acc.z||0]);
   }
   if (breakCalibState === 'waitForStill') {
     let acc = event.acceleration;
     if (!acc) return;
     let aVec = [acc.x||0, acc.y||0, acc.z||0];
     let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
-    if (aMag < 0.2) {
+    if (aMag < (window.breakStopThreshold || 0.2)) {
       breakGravAccs.push(window.lastAccInclGrav ? [window.lastAccInclGrav.x||0, window.lastAccInclGrav.y||0, window.lastAccInclGrav.z||0] : [0,0,0]);
       if (breakGravAccs.length > 40) { // ca. 2s bei 20Hz
         breakCalibState = 'done';
@@ -503,6 +498,35 @@ window.addEventListener('devicemotion', function(event) {
     }
   }
 });
+// Buttons für Schwellenwert-Änderung
+  document.getElementById('decelLeft').onclick = function() {
+    let input = document.getElementById('decelThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val - 0.1);
+    input.value = val.toFixed(1);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('decelRight').onclick = function() {
+    let input = document.getElementById('decelThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = val + 0.1;
+    input.value = val.toFixed(1);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('stopLeft').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val - 0.1);
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('stopRight').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = val + 0.1;
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
   </script>
 </body>
 </html>
