@@ -424,11 +424,16 @@ document.getElementById('calibBtn').onclick = function() {
   if (ax < 0) winkelX = -winkelX;
   document.getElementById('winkelX').value = winkelX.toFixed(1);
 };
+let breakCalibState = null;
+let breakAccs = [];
+let breakGravAccs = [];
+let breakTimeout = null;
 document.getElementById('calibBreakBtn').onclick = function() {
   if (breakCalibState) return;
   breakCalibState = 'waitForAccel';
   breakAccs = [];
   breakGravAccs = [];
+  if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
   // Schwellenwerte aus den Eingabefeldern holen
   window.breakDecelThreshold = parseFloat(document.getElementById('decelThreshold').value) || 2;
   window.breakStopThreshold = parseFloat(document.getElementById('stopThreshold').value) || 0.3;
@@ -448,6 +453,7 @@ window.addEventListener('devicemotion', function(event) {
       breakCalibState = 'measureAccel';
       breakAccs = [];
       document.getElementById('status').innerHTML = 'Messe Bremsrichtung...';
+      if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
       breakTimeout = setTimeout(function(){
         breakCalibState = 'waitForStill';
         breakGravAccs = [];
@@ -455,6 +461,11 @@ window.addEventListener('devicemotion', function(event) {
         breakTimeout = null;
       }, 500);
     }
+  }
+  if (breakCalibState === 'measureAccel') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    breakAccs.push([acc.x||0, acc.y||0, acc.z||0]);
   }
   if (breakCalibState === 'waitForStill') {
     let acc = event.acceleration;
