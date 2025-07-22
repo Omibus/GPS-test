@@ -27,12 +27,17 @@
     <label>Schwellenwert Verzögerung (m/s²):
       <input type="number" id="decelThreshold" value="2" min="0" step="0.1">
     </label>
-    <label>Richtung (X, Y, Z):
+    <label>Richtung (X, Y, Z, Betrag):
       <select id="direction">
         <option value="x">X</option>
         <option value="y">Y</option>
         <option value="z">Z</option>
+        <option value="betrag">Betrag</option>
       </select>
+    </label>
+    <label style="margin-top:0.5rem;display:block;">
+      <input type="checkbox" id="gravityToggle" checked>
+      Mit Gravitation messen
     </label>
     <label>Schwellenwert Stillstand (m/s²):
       <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01">
@@ -53,6 +58,7 @@
     let decelThreshold = 2;
     let stopThreshold = 0.3;
     let direction = 'x';
+    let useGravity = true;
     let startSpeed = 0;
     let currentSpeed = 0;
     let distance = 0;
@@ -72,6 +78,13 @@
       document.getElementById('result').innerHTML = '';
       document.getElementById('status').innerHTML = 'Warte auf Verzögerung...';
       document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+    };
+
+    document.getElementById('direction').onchange = function() {
+      direction = document.getElementById('direction').value;
+    };
+    document.getElementById('gravityToggle').onchange = function() {
+      useGravity = document.getElementById('gravityToggle').checked;
     };
 
     document.getElementById('stopBtn').onclick = function() {
@@ -134,10 +147,19 @@
     }
 
     window.addEventListener('devicemotion', function(event) {
-      let acc = event.accelerationIncludingGravity;
+      let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
       if (!acc) return;
-      let a = acc[direction] || 0;
-      document.getElementById('acceleration').innerHTML = `Verzögerung inkl. Gravitation: ${a.toFixed(2)} m/s²`;
+      let a = 0;
+      if (direction === 'betrag') {
+        a = Math.sqrt(
+          Math.pow(acc.x || 0, 2) +
+          Math.pow(acc.y || 0, 2) +
+          Math.pow(acc.z || 0, 2)
+        );
+      } else {
+        a = acc[direction] || 0;
+      }
+      document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
       // Echtzeit-Update der Verzögerung
       if (waitingForDecel && Math.abs(a) >= decelThreshold) {
         measuring = true;
