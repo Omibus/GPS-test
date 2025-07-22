@@ -70,6 +70,7 @@
     let lastSpeed = 0;
     let watchId = null;
     let results = [];
+let accHistory = []; // Für Plot und Mittelwert
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -198,6 +199,8 @@
         waitingForDecel = false;
         startTime = performance.now();
         startSpeed = currentSpeed;
+        accHistory = [];
+        accHistory.push({t: 0, a: a});
         document.getElementById('status').innerHTML = 'Messung läuft...';
       }
       if (measuring) {
@@ -211,12 +214,29 @@
         currentSpeed -= Math.abs(a) * dt;
         if (currentSpeed < 0) currentSpeed = 0;
         distance += currentSpeed * dt;
+        // Verzögerung und Zeit für Plot speichern
+        let t = (performance.now() - startTime) / 1000;
+        accHistory.push({t: t, a: a});
         if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold) {
           measuring = false;
           stopTime = performance.now();
           let time = ((stopTime - startTime) / 1000).toFixed(2);
+          // Mittelwert der Verzögerung berechnen
+          let meanA = 0;
+          if (accHistory.length > 1) {
+            let sum = 0;
+            for (let i = 1; i < accHistory.length; i++) {
+              let dt = accHistory[i].t - accHistory[i-1].t;
+              sum += Math.abs(accHistory[i].a) * dt;
+            }
+            meanA = sum / (accHistory[accHistory.length-1].t);
+          }
+          // Vergleichsbremsweg bei konstanter Verzögerung
+          let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
           document.getElementById('result').innerHTML =
-            `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s`;
+            `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
+            `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+            `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
           // Ergebnis speichern und anzeigen
           results.push({
@@ -225,12 +245,58 @@
             distance: distance.toFixed(2)
           });
           updateResultsList();
+          // Plot anzeigen
+          showAccPlot(accHistory);
           // App zurücksetzen für neue Messung
           waitingForDecel = false;
           measuring = false;
         }
       }
     });
+
+// Plot-Funktion für Verzögerung über Zeit
+function showAccPlot(data) {
+  let plotDiv = document.getElementById('result');
+  let w = 350, h = 120, pad = 30;
+  let canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.marginTop = '1em';
+  let ctx = canvas.getContext('2d');
+  // Achsen
+  ctx.strokeStyle = '#888';
+  ctx.beginPath();
+  ctx.moveTo(pad, h-pad);
+  ctx.lineTo(w-pad, h-pad);
+  ctx.moveTo(pad, h-pad);
+  ctx.lineTo(pad, pad);
+  ctx.stroke();
+  // Wertebereich
+  let tmax = data[data.length-1].t;
+  let amin = Math.min(...data.map(d=>d.a));
+  let amax = Math.max(...data.map(d=>d.a));
+  if (amin === amax) { amin -= 1; amax += 1; }
+  // Plot
+  ctx.strokeStyle = '#e84118';
+  ctx.beginPath();
+  for (let i=0; i<data.length; i++) {
+    let x = pad + (w-2*pad) * (data[i].t/tmax);
+    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
+    if (i===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // Beschriftung
+  ctx.fillStyle = '#222';
+  ctx.font = '12px Segoe UI';
+  ctx.fillText('Zeit (s)', w/2-20, h-5);
+  ctx.save();
+  ctx.translate(10, h/2+20);
+  ctx.rotate(-Math.PI/2);
+  ctx.fillText('Verzögerung (m/s²)', 0, 0);
+  ctx.restore();
+  plotDiv.appendChild(canvas);
+}
   </script>
 </body>
 </html>
