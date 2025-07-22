@@ -134,10 +134,10 @@
     }
 
     window.addEventListener('devicemotion', function(event) {
-      let acc = event.acceleration;
+      let acc = event.accelerationIncludingGravity;
       if (!acc) return;
       let a = acc[direction] || 0;
-      document.getElementById('acceleration').innerHTML = `Verzögerung: ${a.toFixed(2)} m/s²`;
+      document.getElementById('acceleration').innerHTML = `Verzögerung inkl. Gravitation: ${a.toFixed(2)} m/s²`;
       // Echtzeit-Update der Verzögerung
       if (waitingForDecel && Math.abs(a) >= decelThreshold) {
         measuring = true;
