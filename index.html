@@ -1,5 +1,3 @@
-
-
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -73,6 +71,7 @@
     let results = [];
 let accHistory = []; // Für Plot und Mittelwert
 let accHistories = []; // Für Excel-Export
+let plotPNGs = []; // Für Anzeige der Historie
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -246,8 +245,9 @@ let accHistories = []; // Für Excel-Export
             `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
             `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-          // Plot anzeigen
-          showAccPlot(accHistory, false);
+          // Plot anzeigen und PNG für Historie erzeugen
+          let png = showAccPlot(accHistory, true);
+          plotPNGs.push(png);
           // Messwerte für Excel speichern
           accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
           // Ergebnis speichern und anzeigen
