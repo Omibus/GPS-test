@@ -246,18 +246,18 @@ let plotPNGs = []; // Für Export
             `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
             `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>`;
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+          // Plot anzeigen und PNG für Übersicht/Export speichern
+          let png = showAccPlot(accHistory, true);
+          plotPNGs.push(png);
           // Ergebnis speichern und anzeigen
           results.push({
             time: time,
             startSpeed: startSpeed.toFixed(2),
-            distance: distance.toFixed(2)
-            , vergleichsweg: vergleichsweg.toFixed(2)
-            , meanA: meanA.toFixed(2)
+            distance: distance.toFixed(2),
+            vergleichsweg: vergleichsweg.toFixed(2),
+            meanA: meanA.toFixed(2)
           });
           updateResultsList();
-          // Plot anzeigen und PNG für Übersicht/Export speichern
-          let png = showAccPlot(accHistory, true);
-          plotPNGs.push(png);
           // App zurücksetzen für neue Messung
           waitingForDecel = false;
           measuring = false;
