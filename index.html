@@ -33,10 +33,12 @@
         <option value="betrag">Betrag</option>
       </select>
     </label>
-    <div style="margin-top:0.5rem;">
-      <label>Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
-      <label>Verdrehwinkel um Y (°): <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1"></label>
-      <label>Verdrehwinkel um Z (°): <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1"></label>
+    <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
+      <label style="flex:1;">Verdrehwinkel um X (°): <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1"></label>
+      <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">Kalibrieren</button>
+    </div>
+    <label>Verdrehwinkel um Y (°): <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1"></label>
+    <label>Verdrehwinkel um Z (°): <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1"></label>
     </div>
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
@@ -396,6 +398,34 @@ document.getElementById('exportBtn').onclick = function() {
     XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
   });
 };
+
+document.getElementById('calibBtn').onclick = function() {
+  // Hole aktuelle Beschleunigung inkl. Gravitation
+  let acc = window.lastAccInclGrav;
+  if (!acc) {
+    alert('Keine Beschleunigungsdaten verfügbar. Bitte das Gerät ruhig halten und kurz warten.');
+    return;
+  }
+  // Berechne Winkel zwischen Beschleunigungsvektor und Z-Achse
+  let ax = acc.x || 0;
+  let ay = acc.y || 0;
+  let az = acc.z || 0;
+  let g = Math.sqrt(ax*ax + ay*ay + az*az);
+  if (g === 0) {
+    alert('Ungültige Sensordaten.');
+    return;
+  }
+  // Winkel zur Z-Achse (in Grad)
+  let winkelX = Math.acos(az/g) * 180 / Math.PI;
+  // Vorzeichen: Wenn ax negativ, dann negativ
+  if (ax < 0) winkelX = -winkelX;
+  document.getElementById('winkelX').value = winkelX.toFixed(1);
+};
+
+window.lastAccInclGrav = null;
+window.addEventListener('devicemotion', function(event) {
+  window.lastAccInclGrav = event.accelerationIncludingGravity;
+});
   </script>
 </body>
 </html>
