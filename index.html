@@ -9,12 +9,12 @@
     .container { max-width: 400px; margin: 2rem auto; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; padding-left:2rem; padding-right:2rem; }
     h1 { text-align: center; }
     label { display: block; margin-top: 1rem; }
-    input, select { width: 100%; padding: 0.5rem; margin-top: 0.5rem; border-radius: 0.5rem; border: 1px solid #ccc; box-sizing: border-box; height: 2.5em; }
+    input, select { width: 100%; padding: 0.5rem; margin: 0; border-radius: 0.5rem; border: 1px solid #ccc; box-sizing: border-box; height: 2.5em; }
     button { margin-top: 1.5rem; width: 100%; padding: 1rem; border: none; border-radius: 0.5rem; background: #4cd137; color: #fff; font-size: 1.2rem; cursor: pointer; box-sizing: border-box; }
-    .inline-btn { width:2.5em; height:2.5em; padding:0; margin:0; display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; font-size:1.5em; border-radius:0.5em; border:none; background:#eee; color:#222; }
-    .inline-btn:active { background:#ddd; }
-    .inline-btn-clear { width:2.5em; height:2.5em; padding:0; margin:0; display:inline-flex; align-items:center; justify-content:center; vertical-align:middle; font-size:1.3em; border-radius:0.5em; border:none; background:#eee; color:#e84118; }
-    .inline-btn-clear:active { background:#ddd; }
+    .inline-btn, .inline-btn-clear { width:2.5em; height:2.5em; padding:0; margin:0; display:inline-flex; align-items:center; justify-content:center; font-size:1.5em; border-radius:0.5em; border:none; background:#eee; color:#222; box-sizing: border-box; }
+    .inline-btn-clear { color:#e84118; font-size:1.3em; }
+    .inline-btn:active, .inline-btn-clear:active { background:#ddd; }
+    .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     button:disabled { background: #aaa; }
     .result { margin-top: 2rem; background: #f0f0f0; padding: 1rem; border-radius: 0.5rem; }
@@ -62,7 +62,7 @@
       <button id="clearWinkelZ" type="button" class="inline-btn-clear">&#10006;</button>
     </div>
     <label style="margin-top:0.5rem;display:block;">
-      <input type="checkbox" id="gravityToggle" checked>
+      <input type="checkbox" id="gravityToggle">
       Mit Gravitation messen
     </label>
     <button id="startBtn">Messung starten</button>
