@@ -11,7 +11,21 @@
     label { display: block; margin-top: 1rem; }
     input, select { width: 100%; padding: 0.5rem; margin: 0; border-radius: 0.5rem; border: 1px solid #ccc; box-sizing: border-box; height: 2.5em; }
     button { margin-top: 1.5rem; width: 100%; padding: 1rem; border: none; border-radius: 0.5rem; background: #4cd137; color: #fff; font-size: 1.2rem; cursor: pointer; box-sizing: border-box; }
-    .inline-btn, .inline-btn-clear { width:2.5em; height:2.5em; padding:0; margin:0; display:inline-flex; align-items:center; justify-content:center; font-size:1.5em; border-radius:0.5em; border:none; background:#eee; color:#222; box-sizing: border-box; }
+    .inline-btn, .inline-btn-clear {
+      width: calc(2.5em + 2px); /* exakt wie input inkl. border */
+      height: calc(2.5em + 2px);
+      padding: 0;
+      margin: 0;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.5em;
+      border-radius: 0.5em;
+      border: 1px solid #ccc;
+      background: #eee;
+      color: #222;
+      box-sizing: border-box;
+    }
     .inline-btn-clear { color:#e84118; font-size:1.3em; }
     .inline-btn:active, .inline-btn-clear:active { background:#ddd; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
@@ -82,7 +96,7 @@
     let decelThreshold = 2;
     let stopThreshold = 0.3;
     let direction = 'y';
-    let useGravity = true;
+let useGravity = false;
     let startSpeed = 0;
     let currentSpeed = 0;
     let distance = 0;
