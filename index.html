@@ -27,26 +27,34 @@
       <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
     </div>
     <label style="display:flex;align-items:center;gap:0.5em;">Schwellenwert Verzögerung (m/s²):
-      <button id="decelLeft" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#8592;</button>
-      <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;min-width:60px;height:2.5em;vertical-align:middle;">
-      <button id="decelRight" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#8594;</button>
+      <button id="decelLeft" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#8592;</button>
+      <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;min-width:60px;height:2.5em;vertical-align:middle;display:inline-block;">
+      <button id="decelRight" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#8594;</button>
     </label>
     <label style="display:flex;align-items:center;gap:0.5em;margin-top:0.5em;">Schwellenwert Stillstand (m/s²):
-      <button id="stopLeft" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#8592;</button>
-      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;min-width:60px;height:2.5em;vertical-align:middle;">
-      <button id="stopRight" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#8594;</button>
+      <button id="stopLeft" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#8592;</button>
+      <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;min-width:60px;height:2.5em;vertical-align:middle;display:inline-block;">
+      <button id="stopRight" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#8594;</button>
+    </label>
+    <label style="display:flex;align-items:center;gap:0.5em;">Richtung (X, Y, Z, Betrag):
+      <select id="direction" style="flex:1;height:2.5em;vertical-align:middle;">
+        <option value="x">X</option>
+        <option value="y" selected>Y</option>
+        <option value="z">Z</option>
+        <option value="betrag">Betrag</option>
+      </select>
     </label>
     <label style="display:flex;align-items:center;gap:0.5em;">Verdrehwinkel um X (°):
-      <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;">
-      <button id="clearWinkelX" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#10006;</button>
+      <input type="number" id="winkelX" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;display:inline-block;">
+      <button id="clearWinkelX" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#10006;</button>
     </label>
     <label style="display:flex;align-items:center;gap:0.5em;">Verdrehwinkel um Y (°):
-      <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;">
-      <button id="clearWinkelY" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#10006;</button>
+      <input type="number" id="winkelY" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;display:inline-block;">
+      <button id="clearWinkelY" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#10006;</button>
     </label>
     <label style="display:flex;align-items:center;gap:0.5em;">Verdrehwinkel um Z (°):
-      <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;">
-      <button id="clearWinkelZ" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:flex;align-items:center;justify-content:center;">&#10006;</button>
+      <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1" style="flex:1;height:2.5em;vertical-align:middle;display:inline-block;">
+      <button id="clearWinkelZ" type="button" style="padding:0;margin:0;width:2.5em;height:2.5em;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;">&#10006;</button>
     </label>
     <label style="margin-top:0.5rem;display:block;">
       <input type="checkbox" id="gravityToggle" checked>
