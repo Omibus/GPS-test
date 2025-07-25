@@ -25,9 +25,6 @@
       background: #eee;
       color: #222;
       box-sizing: border-box;
-    }
-    .inline-btn-clear { color:#e84118; font-size:1.3em; }
-    .inline-btn:active, .inline-btn-clear:active { background:#ddd; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     button:disabled { background: #aaa; }
@@ -35,10 +32,9 @@
     .status { margin-top: 1rem; color: #888; font-size: 0.9rem; }
     .speed { font-size: 1.2rem; margin-top: 1rem; text-align: center; }
   </style>
-</head>
+<body>
   <div class="container">
     <h1>Bremsweg-Messung</h1>
-</body>
     <div class="speed" id="speed">Geschwindigkeit: 0 m/s</div>
     <div class="speed" id="gps">GPS: - / -</div>
     <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
@@ -115,9 +111,6 @@ let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (letzte 3s)
         wakeLock = await navigator.wakeLock.request('screen');
         wakeLock.addEventListener('release', () => {
           console.log('Wake Lock wurde freigegeben');
-        });
-      } catch (err) {
-        console.error('Wake Lock Fehler:', err);
       }
     }
     function releaseWakeLock() {
@@ -836,7 +829,6 @@ window.addEventListener('devicemotion', function(event) {
     input.value = val.toFixed(2);
     input.dispatchEvent(new Event('input'));
   };
-  </script>
-</body>
+  }
 </body>
 </html>
