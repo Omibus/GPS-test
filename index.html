@@ -434,10 +434,34 @@ window.addEventListener('devicemotion', function(event) {
           document.getElementById('status').innerHTML = 'Stillstand erkannt.';
 
           // --- Schwellenwertpunkte für Plot bestimmen ---
-          // (Plot zeigt weiterhin den gesamten Bereich inkl. Puffer)
+          // Plot zeigt: nur im Bremsintervall geglättet, außerhalb roh
           let tPlotStart = 0;
           let tPlotEnd = Math.max(...accHistory.map(d=>d.t));
-          let png = showAccPlot(smoothAccHistoryPartial(accHistory), true, {
+          // Glättung nur im Bremsintervall, mit 3 Messwerten Abstand zu den Schwellenwerten
+          function smoothForPlot(data, tStart, tEnd, offset=3) {
+            const n = data.length;
+            if (n < 2) return data;
+            // Finde Indexbereiche für Glättung
+            let idxStart = data.findIndex(d => d.t >= tStart);
+            let idxEnd = data.findIndex(d => d.t > tEnd);
+            if (idxEnd === -1) idxEnd = n;
+            let smoothed = [];
+            for (let i = 0; i < n; i++) {
+              if (i < idxStart + offset || i >= idxEnd - offset) {
+                smoothed.push({ t: data[i].t, a: data[i].a });
+              } else {
+                let sum = 0, count = 0;
+                for (let j = Math.max(0, i - Math.floor(5/2)); j <= Math.min(n - 1, i + Math.floor(5/2)); j++) {
+                  sum += data[j].a;
+                  count++;
+                }
+                smoothed.push({ t: data[i].t, a: sum / count });
+              }
+            }
+            return smoothed;
+          }
+          let plotData = smoothForPlot(accHistory, tStartThresh, tEndThresh, 3);
+          let png = showAccPlot(plotData, true, {
             tStart: tPlotStart,
             tEnd: tPlotEnd,
             tThreshStart: tStartThresh,
@@ -449,8 +473,8 @@ window.addEventListener('devicemotion', function(event) {
           window._tThreshAbs = undefined;
           window._tThreshEndAbs = undefined;
           plotPNGs.push(png);
-          // Messwerte für Excel speichern (geglättet)
-          accHistories.push(smoothAccHistoryPartial(accHistory).map(d => ({t: d.t, a: d.a})));
+          // Messwerte für Excel speichern (geglättet wie im Plot)
+          accHistories.push(plotData.map(d => ({t: d.t, a: d.a})));
           // Ergebnis speichern und anzeigen
           results.push({
             time: time,
