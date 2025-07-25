@@ -375,6 +375,13 @@ document.getElementById('clearWinkelZ').onclick = function() {
             window._postStopTimeout = setTimeout(function() {
               measuring = false;
               stopTime = performance.now();
+              // Doppelte Zeitstempel am Ende entfernen (z.B. falls mehrfach accHistory.push mit gleichem t)
+              let seen = new Set();
+              accHistory = accHistory.filter(d => {
+                let key = d.t.toFixed(5); // 5 Nachkommastellen reichen
+                if (seen.has(key)) return false;
+                seen.add(key); return true;
+              });
               let time = ((stopTime - startTime) / 1000).toFixed(2);
 
               // Glättung nur im mittleren Bereich anwenden
