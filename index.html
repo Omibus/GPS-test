@@ -368,7 +368,6 @@ document.getElementById('clearWinkelZ').onclick = function() {
         if (!window._tThreshEndAbs) {
           // Prüfe, ob der Schwellenwert zwischen dem aktuellen und dem vorigen Wert unterschritten wurde ODER ein Vorzeichenwechsel stattfand
           let prev = accHistory.length > 1 ? accHistory[accHistory.length-2] : null;
-          let curr = { t: (now - startTime) / 1000, a: a, absTime: now };
           if (prev) {
             let prevAbsA = Math.abs(prev.a);
             let currAbsA = Math.abs(a);
@@ -377,27 +376,32 @@ document.getElementById('clearWinkelZ').onclick = function() {
             let t1 = prev.absTime;
             let t2 = now;
             let tCross = null;
+
             // Fall 1: Betrag unterschreitet Schwellenwert (von >= auf <)
-            if (tCross === null && prevAbsA >= stopThreshold && currAbsA < stopThreshold) {
+            if (tCross === null && prevAbsA >= stopThreshold && currAbsA < stopThreshold && prevAbsA !== currAbsA) {
               // Interpolation mit Originalwerten, nicht mit Betrag!
-              let a1 = prevA;
-              let a2 = currA;
               let absA1 = prevAbsA;
               let absA2 = currAbsA;
               let frac = (absA1 - stopThreshold) / (absA1 - absA2);
-              tCross = t1 + frac * (t2 - t1);
+              // Schutz gegen NaN/Infinity
+              if (isFinite(frac) && frac >= 0 && frac <= 1) {
+                tCross = t1 + frac * (t2 - t1);
+              }
             }
             // Fall 2: Vorzeichenwechsel (a1 * a2 < 0)
-            if (tCross === null && prevA !== 0 && Math.sign(prevA) !== Math.sign(currA)) {
+            if (tCross === null && prevA !== 0 && Math.sign(prevA) !== Math.sign(currA) && prevA !== currA) {
               let a1 = prevA;
               let a2 = currA;
               let frac = -a1 / (a2 - a1);
-              tCross = t1 + frac * (t2 - t1);
+              if (isFinite(frac) && frac >= 0 && frac <= 1) {
+                tCross = t1 + frac * (t2 - t1);
+              }
             }
             // Fall 3: Exakter Treffer (Betrag == Schwellenwert)
             if (tCross === null && currAbsA === stopThreshold) {
               tCross = now;
             }
+            // Fallback: Falls alle Bedingungen fehlschlagen, kein Trigger
             if (tCross !== null && window._tThreshEndAbs === null) {
               window._tThreshEndAbs = tCross;
               window._tThreshEndRel = (tCross - window._t0Abs)/1000;
