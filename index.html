@@ -383,23 +383,19 @@ document.getElementById('clearWinkelZ').onclick = function() {
               let a2 = currAbsA;
               let frac = (a1 - stopThreshold) / (a1 - a2);
               tCross = t1 + frac * (t2 - t1);
-              // Interpolierter Punkt
             }
             // Fall 2: Vorzeichenwechsel (a1 * a2 < 0)
-            else if (prevA * currA < 0) {
-              // Interpolation für Nulldurchgang
+            if (tCross === null && prevA * currA < 0) {
               let a1 = prevA;
               let a2 = currA;
               let frac = -a1 / (a2 - a1);
               tCross = t1 + frac * (t2 - t1);
-              // Interpolierter Punkt
             }
             // Fall 3: Exakter Treffer (Betrag == Schwellenwert)
-            else if (currAbsA === stopThreshold) {
+            if (tCross === null && currAbsA === stopThreshold) {
               tCross = now;
-              // Kein interpolierter Punkt, sondern echter Messwert
             }
-            if (tCross !== null) {
+            if (tCross !== null && window._tThreshEndAbs === null) {
               window._tThreshEndAbs = tCross;
               window._tThreshEndRel = (tCross - window._t0Abs)/1000;
               // 1 Sekunde nach Stop noch weiter aufzeichnen
@@ -971,6 +967,10 @@ window.addEventListener('devicemotion', function(event) {
     window.addEventListener('touchstart', requestWakeLock, { once: true });
     window.addEventListener('mousedown', requestWakeLock, { once: true });
     // Optional: direkt beim Laden versuchen
+    requestWakeLock();
+  </script>
+</body>
+</html>
     requestWakeLock();
   </script>
 </body>
