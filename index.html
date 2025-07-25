@@ -474,7 +474,7 @@ function movingAverage(arr, windowSize) {
 
 function showAccPlots(accHistory, decelThreshold, stopThreshold, returnPNG=false) {
   // accHistory: gesamter Verlauf (inkl. Vor- und Nachlauf)
-  // Glättung nur im Bremsintervall, mit Abstand zu den Schwellenwerten
+  // Glättung nur im Bremsintervall, davor und danach roh
   let plotDiv = document.getElementById('result');
   plotDiv.innerHTML = '';
   let w = 340, h = 160, pad = 40;
@@ -556,27 +556,23 @@ function showAccPlots(accHistory, decelThreshold, stopThreshold, returnPNG=false
   ctx.fillStyle = '#222';
   ctx.font = 'bold 13px Segoe UI';
   ctx.fillText('Rohdaten', w/2, pad-18);
-  // --- Glättung nur im Bremsintervall (mit Abstand zu Schwellenwerten) ---
-  // Finde Bremsintervall (zwischen erstem Überschreiten -decelThreshold und letztem Unterschreiten -stopThreshold)
+
+  // --- Glättung nur im Bremsintervall ---
+  // Finde Bremsintervall: idxStart = erstes a <= -decelThreshold, idxStop = letztes a <= -stopThreshold
   let idxStart = accHistory.findIndex(d => d.a <= -Math.abs(decelThreshold));
-  let idxStop = accHistory.length-1;
-  for (let i=accHistory.length-1; i>=0; i--) {
+  let idxStop = -1;
+  for (let i = accHistory.length - 1; i >= 0; i--) {
     if (accHistory[i].a <= -Math.abs(stopThreshold)) { idxStop = i; break; }
   }
-  // Abstand zu Schwellenwerten (z.B. 0.1s)
-  let minTimeDist = 0.1;
-  let tStart = accHistory[idxStart]?.t || 0;
-  let tStop = accHistory[idxStop]?.t || tmax;
-  let smoothData = accHistory.map(d=>({...d}));
-  if (idxStart>=0 && idxStop>idxStart) {
+  // Glättung nur, wenn sinnvoller Bereich
+  let smoothData = accHistory.map(d => ({...d}));
+  if (idxStart >= 0 && idxStop > idxStart) {
     let smoothWin = 5; // ca. 0.1s bei 50Hz
-    for (let i=0; i<accHistory.length; i++) {
-      if (accHistory[i].t >= tStart+minTimeDist && accHistory[i].t <= tStop-minTimeDist) {
-        let from = Math.max(0, i-Math.floor(smoothWin/2));
-        let to = Math.min(accHistory.length, i+Math.ceil(smoothWin/2));
-        let vals = accHistory.slice(from, to).map(d=>d.a);
-        smoothData[i].a = vals.reduce((a,b)=>a+b,0)/vals.length;
-      }
+    for (let i = idxStart; i <= idxStop; i++) {
+      let from = Math.max(idxStart, i - Math.floor(smoothWin/2));
+      let to = Math.min(idxStop + 1, i + Math.ceil(smoothWin/2));
+      let vals = accHistory.slice(from, to).map(d => d.a);
+      smoothData[i].a = vals.reduce((a, b) => a + b, 0) / vals.length;
     }
   }
   // --- Glättungs-Plot ---
@@ -615,15 +611,15 @@ function showAccPlots(accHistory, decelThreshold, stopThreshold, returnPNG=false
   ctx2.moveTo(pad, yStop); ctx2.lineTo(w-pad, yStop);
   ctx2.stroke();
   ctx2.setLineDash([]);
-  // Plot Glättung
+  // Plot geglättete Kurve (eine durchgehende Linie)
   ctx2.strokeStyle = '#0097e6';
   ctx2.lineWidth = 2;
   ctx2.beginPath();
-  for (let i=0; i<smoothData.length; i++) {
+  for (let i = 0; i < smoothData.length; i++) {
     let x = pad + (w-2*pad) * (smoothData[i].t/tmax);
     let y = h-pad - (h-2*pad) * ((smoothData[i].a-amin)/(amax-amin));
-    if (i===0) ctx2.moveTo(x,y);
-    else ctx2.lineTo(x,y);
+    if (i === 0) ctx2.moveTo(x, y);
+    else ctx2.lineTo(x, y);
   }
   ctx2.stroke();
   // Marker: Start (grün), Stop (blau)
