@@ -340,26 +340,49 @@ window.addEventListener('devicemotion', function(event) {
   document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
 
   // --- Messung starten, wenn Schwellenwert überschritten ---
-  if (waitingForDecel && Math.abs(a) >= decelThreshold) {
-    measuring = true;
-    waitingForDecel = false;
-    startTime = performance.now();
-    startSpeed = currentSpeed;
-    // --- accHistory mit 1s Vorlauf aus accBuffer füllen ---
-    let tThresh = startTime;
-    let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
-    let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
-    accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
-    // Ersten Messwert (Schwellenwertüberschreitung) anhängen, falls nicht schon enthalten
-    if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
-      accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
+  // --- Korrekte Trigger-Logik für Startschwellenwert (Vorzeichen beachten) ---
+  if (waitingForDecel) {
+    // Bestimme Richtung: positiv oder negativ
+    if (a >= decelThreshold) {
+      // Positiver Bremsvorgang
+      measuring = true;
+      waitingForDecel = false;
+      startTime = performance.now();
+      startSpeed = currentSpeed;
+      window._brakeSign = 1;
+      // --- accHistory mit 1s Vorlauf aus accBuffer füllen ---
+      let tThresh = startTime;
+      let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
+      let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
+      accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
+      if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
+        accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
+      }
+      window._tThreshStartRel = (tThresh - t0)/1000;
+      window._t0Abs = t0;
+      window._tThreshAbs = tThresh;
+      window._tThreshEndAbs = null;
+      document.getElementById('status').innerHTML = 'Messung läuft...';
+    } else if (a <= -decelThreshold) {
+      // Negativer Bremsvorgang
+      measuring = true;
+      waitingForDecel = false;
+      startTime = performance.now();
+      startSpeed = currentSpeed;
+      window._brakeSign = -1;
+      let tThresh = startTime;
+      let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
+      let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
+      accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
+      if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
+        accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
+      }
+      window._tThreshStartRel = (tThresh - t0)/1000;
+      window._t0Abs = t0;
+      window._tThreshAbs = tThresh;
+      window._tThreshEndAbs = null;
+      document.getElementById('status').innerHTML = 'Messung läuft...';
     }
-    // Merke den relativen Zeitpunkt des Schwellenwerts für späteren Plot
-    window._tThreshStartRel = (tThresh - t0)/1000;
-    window._t0Abs = t0;
-    window._tThreshAbs = tThresh;
-    window._tThreshEndAbs = null;
-    document.getElementById('status').innerHTML = 'Messung läuft...';
   }
 
   // --- Während Messung: Werte kontinuierlich aufzeichnen ---
@@ -380,13 +403,17 @@ window.addEventListener('devicemotion', function(event) {
     accHistory.push({t: t, a: a, absTime: absTime});
 
     // --- Stop-Schwellenwert erreicht? ---
-    // Kriterium: Erster Zeitpunkt, an dem |a| <= stopThreshold (unabhängig vom Vorzeichen)
-    if (!window._tThreshEndAbs && Math.abs(a) <= stopThreshold) {
-      window._tThreshEndAbs = absTime;
-      window._tThreshEndRel = (absTime - window._t0Abs)/1000;
-      // 1 Sekunde nach Stop noch weiter aufzeichnen
-      if (!window._postStopTimeout) {
-        window._postStopTimeout = setTimeout(function() {
+    // Kriterium: Je nach Richtung: positiver Bremsvorgang -> a <= stopThreshold, negativer -> a >= -stopThreshold
+    if (!window._tThreshEndAbs && window._brakeSign) {
+      if (
+        (window._brakeSign === 1 && a <= stopThreshold) ||
+        (window._brakeSign === -1 && a >= -stopThreshold)
+      ) {
+        window._tThreshEndAbs = absTime;
+        window._tThreshEndRel = (absTime - window._t0Abs)/1000;
+        // 1 Sekunde nach Stop noch weiter aufzeichnen
+        if (!window._postStopTimeout) {
+          window._postStopTimeout = setTimeout(function() {
           measuring = false;
           stopTime = performance.now();
           // --- accHistory auf 1s nach Stop-Schwellenwert beschränken ---
@@ -469,7 +496,7 @@ window.addEventListener('devicemotion', function(event) {
             tStart: tPlotStart,
             tEnd: tPlotEnd,
             tThreshStart: tStartThresh,
-            tThreshEnd: tEndThresh
+// }
           });
           // Plot 2: Rohdaten
           let pngRaw = showAccPlot(accHistory, true, {
@@ -508,7 +535,7 @@ window.addEventListener('devicemotion', function(event) {
       }
     }
   }
-});
+// ...existing code...
 
 // Plot-Funktion für Verzögerung über Zeit
 // Plot-Funktion für Verzögerung über Zeit mit erweitertem Zeitbereich und Markierung der Schwellenwerte
@@ -810,5 +837,6 @@ window.addEventListener('devicemotion', function(event) {
     input.dispatchEvent(new Event('input'));
   };
   </script>
+}
 </body>
 </html>
