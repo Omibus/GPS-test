@@ -461,18 +461,33 @@ window.addEventListener('devicemotion', function(event) {
             return smoothed;
           }
           let plotData = smoothForPlot(accHistory, tStartThresh, tEndThresh, 3);
-          let png = showAccPlot(plotData, true, {
+          // --- Beide Plots erzeugen: geglättet und roh ---
+          let plotDiv = document.getElementById('result');
+          plotDiv.innerHTML = '';
+          // Plot 1: geglättet (wie bisher)
+          let pngSmooth = showAccPlot(plotData, true, {
             tStart: tPlotStart,
             tEnd: tPlotEnd,
             tThreshStart: tStartThresh,
             tThreshEnd: tEndThresh
           });
+          // Plot 2: Rohdaten
+          let pngRaw = showAccPlot(accHistory, true, {
+            tStart: tPlotStart,
+            tEnd: tPlotEnd,
+            tThreshStart: tStartThresh,
+            tThreshEnd: tEndThresh
+          });
+          // Beide Plots anzeigen
+          let labelStyle = 'font-family:Segoe UI,Arial,sans-serif;font-size:13px;margin-top:0.5em;margin-bottom:0.2em;display:block;';
+          plotDiv.innerHTML += `<span style='${labelStyle}'>Geglättete Kurve (nur im Bremsintervall):</span><img src='${pngSmooth}' style='width:320px;border:1px solid #ccc;'><br>`;
+          plotDiv.innerHTML += `<span style='${labelStyle}'>Rohdaten:</span><img src='${pngRaw}' style='width:320px;border:1px solid #ccc;'><br>`;
           window._tThreshStartRel = undefined;
           window._tThreshEndRel = undefined;
           window._t0Abs = undefined;
           window._tThreshAbs = undefined;
           window._tThreshEndAbs = undefined;
-          plotPNGs.push(png);
+          plotPNGs.push(pngSmooth);
           // Messwerte für Excel speichern (geglättet wie im Plot)
           accHistories.push(plotData.map(d => ({t: d.t, a: d.a})));
           // Ergebnis speichern und anzeigen
