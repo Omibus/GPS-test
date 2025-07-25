@@ -422,11 +422,45 @@ document.getElementById('clearWinkelZ').onclick = function() {
                   // Effektive Bremszeit: Zeit zwischen erstem und zweitem Schwellenwert
                   let tStartThresh = window._tThreshStartRel || 0;
                   let tEndThresh = window._tThreshEndRel || (accHistory[accHistory.length-1]?.t || 0);
-                  let brakeTime = (tEndThresh - tStartThresh);
-                  let time = brakeTime.toFixed(2);
 
                   // Nur Werte im Bremsintervall für Auswertung verwenden
                   let brakeData = accHistory.filter(d => d.t >= tStartThresh && d.t <= tEndThresh);
+
+                  // --- Interpolierte Schwellenwertpunkte für exaktes Intervall einfügen (falls nötig) ---
+                  // Startpunkt
+                  if (brakeData.length === 0 || Math.abs(brakeData[0].t - tStartThresh) > 1e-6) {
+                    // Finde umgebende Punkte
+                    let before = null, after = null;
+                    for (let i = 1; i < accHistory.length; i++) {
+                      if (accHistory[i-1].t <= tStartThresh && accHistory[i].t >= tStartThresh) {
+                        before = accHistory[i-1];
+                        after = accHistory[i];
+                        break;
+                      }
+                    }
+                    if (before && after) {
+                      let frac = (tStartThresh - before.t) / (after.t - before.t);
+                      let aInterp = before.a + frac * (after.a - before.a);
+                      brakeData.unshift({ t: tStartThresh, a: aInterp });
+                    }
+                  }
+                  // Endpunkt
+                  if (brakeData.length === 0 || Math.abs(brakeData[brakeData.length-1].t - tEndThresh) > 1e-6) {
+                    let before = null, after = null;
+                    for (let i = 1; i < accHistory.length; i++) {
+                      if (accHistory[i-1].t <= tEndThresh && accHistory[i].t >= tEndThresh) {
+                        before = accHistory[i-1];
+                        after = accHistory[i];
+                        break;
+                      }
+                    }
+                    if (before && after) {
+                      let frac = (tEndThresh - before.t) / (after.t - before.t);
+                      let aInterp = before.a + frac * (after.a - before.a);
+                      brakeData.push({ t: tEndThresh, a: aInterp });
+                    }
+                  }
+
                   // Mittelwert der Verzögerung berechnen (geglättet)
                   let meanA = 0;
                   if (brakeData.length > 1) {
@@ -440,7 +474,7 @@ document.getElementById('clearWinkelZ').onclick = function() {
                   // Vergleichsbremsweg bei konstanter Verzögerung
                   let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
                   // Alternative Methode: normierte Verzögerungskurve
-                  let normBremsweg = calcNormBremsweg(brakeData, startSpeed, brakeTime);
+                  let normBremsweg = calcNormBremsweg(brakeData, startSpeed, tEndThresh - tStartThresh);
                   document.getElementById('result').innerHTML =
                     `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
                     `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
