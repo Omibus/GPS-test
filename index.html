@@ -613,7 +613,17 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   // --- Schwellenwert-Marker und Zeitmarken ---
   // Marker für Start (grün)
   if (tEvalStart !== undefined) {
+    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalStart
     let idx = data.findIndex(d => d.t === tEvalStart && d._interpolated);
+    if (idx < 0) {
+      // Fallback: nächsten Punkt suchen
+      let minDist = Infinity, minIdx = -1;
+      for (let i = 0; i < data.length; i++) {
+        let dist = Math.abs(data[i].t - tEvalStart);
+        if (dist < minDist) { minDist = dist; minIdx = i; }
+      }
+      idx = minIdx;
+    }
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
@@ -644,7 +654,17 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   }
   // Marker für Ende (blau)
   if (tEvalEnd !== undefined) {
+    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalEnd
     let idx = data.findIndex(d => d.t === tEvalEnd && d._interpolated);
+    if (idx < 0) {
+      // Fallback: nächsten Punkt suchen
+      let minDist = Infinity, minIdx = -1;
+      for (let i = 0; i < data.length; i++) {
+        let dist = Math.abs(data[i].t - tEvalEnd);
+        if (dist < minDist) { minDist = dist; minIdx = i; }
+      }
+      idx = minIdx;
+    }
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
