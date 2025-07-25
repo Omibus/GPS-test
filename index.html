@@ -208,7 +208,6 @@ document.getElementById('clearWinkelZ').onclick = function() {
     s += (vNorm[i-1] + vNorm[i]) / 2 * dt;
   }
   return s;
-}
 
     function updateResultsList() {
       const listDiv = document.getElementById('resultsList');
@@ -576,71 +575,49 @@ function movingAverage(arr, windowSize) {
   return res;
 }
 
-function showAccPlots(accHistory, decelThreshold, stopThreshold, returnPNG=false) {
-  // accHistory: gesamter Verlauf (inkl. Vor- und Nachlauf)
-  // Glättung nur im Bremsintervall, davor und danach roh
+// Plot-Funktion für Verzögerung über Zeit mit Markierung der Schwellenwerte
+function showAccPlot(data, returnPNG=false, opts={}) {
+  // opts: { tStart, tEnd, tThreshStart, tThreshEnd }
   let plotDiv = document.getElementById('result');
-  plotDiv.innerHTML = '';
-  let w = 340, h = 160, pad = 40;
-  // --- Rohdaten-Plot ---
-  let canvasRaw = document.createElement('canvas');
-  canvasRaw.width = w;
-  canvasRaw.height = h;
-  canvasRaw.style.marginTop = '1em';
-  let ctx = canvasRaw.getContext('2d');
-  // Achsen
+  let w = 320, h = 140, pad = 40;
+  let canvas = document.createElement('canvas');
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.marginTop = '1em';
+  let ctx = canvas.getContext('2d');
+  // Zeitbereich bestimmen
+  let tStart = opts.tStart !== undefined ? opts.tStart : 0;
+  let tEnd = opts.tEnd !== undefined ? opts.tEnd : data[data.length-1].t;
+  // Wertebereich bestimmen
+  let amin = Math.min(...data.map(d=>d.a));
+  let amax = Math.max(...data.map(d=>d.a));
+  if (amin === amax) { amin -= 1; amax += 1; }
+  // y=0 (a=0) bestimmen
+  let y0 = h-pad - (h-2*pad) * ((0-amin)/(amax-amin));
+
+  // --- Achsen zeichnen ---
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  ctx.moveTo(pad, h-pad);
-  ctx.lineTo(w-pad, h-pad);
+  // x-Achse (a=0)
+  ctx.moveTo(pad, y0);
+  ctx.lineTo(w-pad, y0);
+  // y-Achse
   ctx.moveTo(pad, h-pad);
   ctx.lineTo(pad, pad);
   ctx.stroke();
-  // Achsenbeschriftungen
+
+  // --- Achsenbeschriftungen ---
   ctx.fillStyle = '#222';
-  ctx.font = '11px Segoe UI';
+  ctx.font = '12px Segoe UI';
   ctx.textAlign = 'center';
+  // X-Achse
   ctx.fillText('Zeit (s)', w/2, h-4);
-  ctx.save();
-  ctx.translate(15, h/2);
-  ctx.rotate(-Math.PI/2);
-  ctx.textAlign = 'center';
-  ctx.font = '11px Segoe UI';
-  ctx.fillText('Verzögerung (m/s²)', 0, 0);
-  ctx.restore();
-  // Wertebereich
-  let tmax = accHistory[accHistory.length-1].t;
-  let amin = Math.min(...accHistory.map(d=>d.a), -decelThreshold*1.2, -stopThreshold*1.2);
-  let amax = Math.max(...accHistory.map(d=>d.a), decelThreshold*1.2, stopThreshold*1.2);
-  if (amin === amax) { amin -= 1; amax += 1; }
-  // Schwellenwert-Linien
-  ctx.strokeStyle = '#aaa';
-  ctx.setLineDash([4,4]);
-  ctx.beginPath();
-  let yDecel = h-pad - (h-2*pad) * ((-Math.abs(decelThreshold)-amin)/(amax-amin));
-  ctx.moveTo(pad, yDecel); ctx.lineTo(w-pad, yDecel);
-  let yStop = h-pad - (h-2*pad) * ((-Math.abs(stopThreshold)-amin)/(amax-amin));
-  ctx.moveTo(pad, yStop); ctx.lineTo(w-pad, yStop);
-  ctx.stroke();
-  ctx.setLineDash([]);
-  // Plot Rohdaten
-  ctx.strokeStyle = '#e84118';
-  ctx.lineWidth = 2;
-  ctx.beginPath();
-  for (let i=0; i<accHistory.length; i++) {
-    let x = pad + (w-2*pad) * (accHistory[i].t/tmax);
-    let y = h-pad - (h-2*pad) * ((accHistory[i].a-amin)/(amax-amin));
-    if (i===0) ctx.moveTo(x,y);
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  // Marker: Start (grün), Stop (blau)
-  ctx.fillStyle = '#44bd32';
-  ctx.beginPath(); ctx.arc(pad, h-pad - (h-2*pad)*((accHistory[0].a-amin)/(amax-amin)), 5, 0, 2*Math.PI); ctx.fill();
-  ctx.fillStyle = '#0097e6';
-  ctx.beginPath(); ctx.arc(pad + (w-2*pad)*(accHistory[accHistory.length-1].t/tmax), h-pad - (h-2*pad)*((accHistory[accHistory.length-1].a-amin)/(amax-amin)), 5, 0, 2*Math.PI); ctx.fill();
-  // Y-Achse Werte
+  // Y-Achse: ganz links oben an der Achse, horizontal
+  ctx.textAlign = 'left';
+  ctx.fillText('a (m/s²)', pad-32, pad-8);
+
+  // --- Wertebereichsbeschriftung ---
   ctx.fillStyle = '#444';
   ctx.font = '12px Segoe UI';
   ctx.textAlign = 'right';
@@ -649,115 +626,86 @@ function showAccPlots(accHistory, decelThreshold, stopThreshold, returnPNG=false
   // X-Achse Werte
   ctx.textAlign = 'center';
   ctx.font = '12px Segoe UI';
-  ctx.fillText('0', pad, h-pad+15);
-  ctx.fillText(tmax.toFixed(2), w-pad, h-pad+15);
-  // Schwellenwert-Labels
-  ctx.fillStyle = '#aaa';
-  ctx.font = '10px Segoe UI';
-  ctx.fillText('-Schwelle', w-pad-30, yDecel-5);
-  ctx.fillText('-Stop', w-pad-30, yStop-5);
-  // Titel
-  ctx.fillStyle = '#222';
-  ctx.font = 'bold 13px Segoe UI';
-  ctx.fillText('Rohdaten', w/2, pad-18);
+  ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
+  ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
-  // --- Glättung nur im Bremsintervall ---
-  // Finde Bremsintervall: idxStart = erstes a <= -decelThreshold, idxStop = letztes a <= -stopThreshold
-  let idxStart = accHistory.findIndex(d => d.a <= -Math.abs(decelThreshold));
-  let idxStop = -1;
-  for (let i = accHistory.length - 1; i >= 0; i--) {
-    if (accHistory[i].a <= -Math.abs(stopThreshold)) { idxStop = i; break; }
+  // --- Plot der Kurve ---
+  const graphLineWidth = 2;
+  ctx.strokeStyle = '#e84118';
+  ctx.lineWidth = graphLineWidth;
+  ctx.beginPath();
+  let first = true;
+  for (let i=0; i<data.length; i++) {
+    if (data[i].t < tStart || data[i].t > tEnd) continue;
+    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
+    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
+    if (first) { ctx.moveTo(x,y); first = false; }
+    else ctx.lineTo(x,y);
   }
-  // Glättung nur, wenn sinnvoller Bereich
-  let smoothData = accHistory.map(d => ({...d}));
-  if (idxStart >= 0 && idxStop > idxStart) {
-    let smoothWin = 5; // ca. 0.1s bei 50Hz
-    for (let i = idxStart; i <= idxStop; i++) {
-      let from = Math.max(idxStart, i - Math.floor(smoothWin/2));
-      let to = Math.min(idxStop + 1, i + Math.ceil(smoothWin/2));
-      let vals = accHistory.slice(from, to).map(d => d.a);
-      smoothData[i].a = vals.reduce((a, b) => a + b, 0) / vals.length;
-    }
+  ctx.stroke();
+
+  // --- Schwellenwert-Linien und Marker ---
+  // Start-Schwellenwert (grün)
+  if (opts.tThreshStart !== undefined) {
+    let x = pad + (w-2*pad) * ((opts.tThreshStart-tStart)/(tEnd-tStart));
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#44bd32';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, h-pad);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = '12px Segoe UI';
+    ctx.fillStyle = '#44bd32';
+    ctx.fillText(opts.tThreshStart.toFixed(2)+'s', x, h-pad+28);
+    // Marker-Kreis (grün, klein)
+    let idx = data.findIndex(d => d.t >= opts.tThreshStart);
+    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
+    ctx.beginPath();
+    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
+    ctx.fillStyle = '#44bd32';
+    ctx.fill();
+    ctx.strokeStyle = '#44bd32';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
   }
-  // --- Glättungs-Plot ---
-  let canvasSmooth = document.createElement('canvas');
-  canvasSmooth.width = w;
-  canvasSmooth.height = h;
-  canvasSmooth.style.marginTop = '1em';
-  let ctx2 = canvasSmooth.getContext('2d');
-  // Achsen
-  ctx2.strokeStyle = '#888';
-  ctx2.lineWidth = 1.2;
-  ctx2.beginPath();
-  ctx2.moveTo(pad, h-pad);
-  ctx2.lineTo(w-pad, h-pad);
-  ctx2.moveTo(pad, h-pad);
-  ctx2.lineTo(pad, pad);
-  ctx2.stroke();
-  // Achsenbeschriftungen
-  ctx2.fillStyle = '#222';
-  ctx2.font = '11px Segoe UI';
-  ctx2.textAlign = 'center';
-  ctx2.fillText('Zeit (s)', w/2, h-4);
-  ctx2.save();
-  ctx2.translate(15, h/2);
-  ctx2.rotate(-Math.PI/2);
-  ctx2.textAlign = 'center';
-  ctx2.font = '11px Segoe UI';
-  ctx2.fillText('Verzögerung (m/s²)', 0, 0);
-  ctx2.restore();
-  // Wertebereich wie Rohdaten
-  // Schwellenwert-Linien
-  ctx2.strokeStyle = '#aaa';
-  ctx2.setLineDash([4,4]);
-  ctx2.beginPath();
-  ctx2.moveTo(pad, yDecel); ctx2.lineTo(w-pad, yDecel);
-  ctx2.moveTo(pad, yStop); ctx2.lineTo(w-pad, yStop);
-  ctx2.stroke();
-  ctx2.setLineDash([]);
-  // Plot geglättete Kurve (eine durchgehende Linie)
-  ctx2.strokeStyle = '#0097e6';
-  ctx2.lineWidth = 2;
-  ctx2.beginPath();
-  for (let i = 0; i < smoothData.length; i++) {
-    let x = pad + (w-2*pad) * (smoothData[i].t/tmax);
-    let y = h-pad - (h-2*pad) * ((smoothData[i].a-amin)/(amax-amin));
-    if (i === 0) ctx2.moveTo(x, y);
-    else ctx2.lineTo(x, y);
+  // End-Schwellenwert (rot)
+  if (opts.tThreshEnd !== undefined) {
+    let x = pad + (w-2*pad) * ((opts.tThreshEnd-tStart)/(tEnd-tStart));
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#e84118';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, h-pad);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = '12px Segoe UI';
+    ctx.fillStyle = '#e84118';
+    ctx.fillText(opts.tThreshEnd.toFixed(2)+'s', x, h-pad+28);
+    // Marker-Kreis (rot, klein)
+    let idx = data.findIndex(d => d.t >= opts.tThreshEnd);
+    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
+    ctx.beginPath();
+    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
+    ctx.fillStyle = '#e84118';
+    ctx.fill();
+    ctx.strokeStyle = '#e84118';
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
   }
-  ctx2.stroke();
-  // Marker: Start (grün), Stop (blau)
-  ctx2.fillStyle = '#44bd32';
-  ctx2.beginPath(); ctx2.arc(pad, h-pad - (h-2*pad)*((smoothData[0].a-amin)/(amax-amin)), 5, 0, 2*Math.PI); ctx2.fill();
-  ctx2.fillStyle = '#0097e6';
-  ctx2.beginPath(); ctx2.arc(pad + (w-2*pad)*(smoothData[smoothData.length-1].t/tmax), h-pad - (h-2*pad)*((smoothData[smoothData.length-1].a-amin)/(amax-amin)), 5, 0, 2*Math.PI); ctx2.fill();
-  // Y-Achse Werte
-  ctx2.fillStyle = '#444';
-  ctx2.font = '12px Segoe UI';
-  ctx2.textAlign = 'right';
-  ctx2.fillText(amin.toFixed(1), pad-5, h-pad);
-  ctx2.fillText(amax.toFixed(1), pad-5, pad+5);
-  // X-Achse Werte
-  ctx2.textAlign = 'center';
-  ctx2.font = '12px Segoe UI';
-  ctx2.fillText('0', pad, h-pad+15);
-  ctx2.fillText(tmax.toFixed(2), w-pad, h-pad+15);
-  // Schwellenwert-Labels
-  ctx2.fillStyle = '#aaa';
-  ctx2.font = '10px Segoe UI';
-  ctx2.fillText('-Schwelle', w-pad-30, yDecel-5);
-  ctx2.fillText('-Stop', w-pad-30, yStop-5);
-  // Titel
-  ctx2.fillStyle = '#222';
-  ctx2.font = 'bold 13px Segoe UI';
-  ctx2.fillText('geglättet (nur Bremsintervall)', w/2, pad-18);
-  // --- Einfügen ---
-  plotDiv.appendChild(canvasRaw);
-  plotDiv.appendChild(canvasSmooth);
-  if (returnPNG) {
-    // PNG von geglättetem Plot zurückgeben
-    return canvasSmooth.toDataURL('image/png');
+  ctx.setLineDash([]);
+
+  if (!returnPNG) {
+    plotDiv.appendChild(canvas);
+    return;
+  } else {
+    return canvas.toDataURL('image/png');
   }
+}
 }
 // SheetJS für Excel-Export einbinden
 let sheetjsLoaded = false;
