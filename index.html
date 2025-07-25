@@ -481,32 +481,48 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   // Zeitbereich bestimmen
   let tStart = opts.tStart !== undefined ? opts.tStart : 0;
   let tEnd = opts.tEnd !== undefined ? opts.tEnd : data[data.length-1].t;
-  // Achsen
-  ctx.strokeStyle = '#888';
-  ctx.lineWidth = 1.2;
-  ctx.beginPath();
-  ctx.moveTo(pad, h-pad);
-  ctx.lineTo(w-pad, h-pad);
-  ctx.moveTo(pad, h-pad);
-  ctx.lineTo(pad, pad);
-  ctx.stroke();
-  // Achsenbeschriftungen
-  ctx.fillStyle = '#222';
-  ctx.font = '11px Segoe UI';
-  ctx.textAlign = 'center';
-  ctx.fillText('Zeit (s)', w/2, h-4);
-  ctx.save();
-  ctx.translate(15, h/2);
-  ctx.rotate(-Math.PI/2);
-  ctx.textAlign = 'center';
-  ctx.font = '11px Segoe UI';
-  ctx.fillText('Verzögerung (m/s²)', 0, 0);
-  ctx.restore();
-  // Wertebereich
+  // Wertebereich bestimmen
   let amin = Math.min(...data.map(d=>d.a));
   let amax = Math.max(...data.map(d=>d.a));
   if (amin === amax) { amin -= 1; amax += 1; }
-  // Plot
+  // y=0 (a=0) bestimmen
+  let y0 = h-pad - (h-2*pad) * ((0-amin)/(amax-amin));
+
+  // --- Achsen zeichnen ---
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  // x-Achse (a=0)
+  ctx.moveTo(pad, y0);
+  ctx.lineTo(w-pad, y0);
+  // y-Achse
+  ctx.moveTo(pad, h-pad);
+  ctx.lineTo(pad, pad);
+  ctx.stroke();
+
+  // --- Achsenbeschriftungen ---
+  ctx.fillStyle = '#222';
+  ctx.font = '11px Segoe UI';
+  ctx.textAlign = 'center';
+  // X-Achse
+  ctx.fillText('Zeit (s)', w/2, h-4);
+  // Y-Achse oben, horizontal
+  ctx.font = 'bold 13px Segoe UI';
+  ctx.fillText('a (m/s²)', pad + (w-2*pad)/2, pad-18);
+
+  // --- Wertebereichsbeschriftung ---
+  ctx.fillStyle = '#444';
+  ctx.font = '12px Segoe UI';
+  ctx.textAlign = 'right';
+  ctx.fillText(amin.toFixed(1), pad-5, h-pad);
+  ctx.fillText(amax.toFixed(1), pad-5, pad+5);
+  // X-Achse Werte
+  ctx.textAlign = 'center';
+  ctx.font = '12px Segoe UI';
+  ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
+  ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
+
+  // --- Plot der Kurve ---
   ctx.strokeStyle = '#e84118';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -519,23 +535,27 @@ function showAccPlot(data, returnPNG=false, opts={}) {
     else ctx.lineTo(x,y);
   }
   ctx.stroke();
-  // Y-Achse Werte
-  ctx.fillStyle = '#444';
-  ctx.font = '12px Segoe UI';
-  ctx.textAlign = 'right';
-  ctx.fillText(amin.toFixed(1), pad-5, h-pad);
-  ctx.fillText(amax.toFixed(1), pad-5, pad+5);
-  // X-Achse Werte
-  ctx.textAlign = 'center';
-  ctx.font = '12px Segoe UI';
-  ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
-  ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
-  // Schwellenwert-Punkte markieren
+  // --- Schwellenwert-Linien und Marker ---
+  ctx.setLineDash([6, 6]);
+  ctx.strokeStyle = '#0097e6';
+  ctx.lineWidth = 1.2;
+  ctx.font = '11px Segoe UI';
+  ctx.fillStyle = '#0097e6';
   if (opts.tThreshStart !== undefined) {
-    // Punkt für Messbeginn
     let x = pad + (w-2*pad) * ((opts.tThreshStart-tStart)/(tEnd-tStart));
-    // Wert an tThreshStart suchen
+    // Vertikale gestrichelte Linie
+    ctx.beginPath();
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, h-pad);
+    ctx.stroke();
+    // Zeitwert angeben
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = '11px Segoe UI';
+    ctx.fillText(opts.tThreshStart.toFixed(2)+'s', x, h-pad+28);
+    ctx.setLineDash([6, 6]);
+    // Marker-Kreis
     let idx = data.findIndex(d => d.t >= opts.tThreshStart);
     let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
     ctx.beginPath();
@@ -545,10 +565,24 @@ function showAccPlot(data, returnPNG=false, opts={}) {
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#0097e6';
+    ctx.lineWidth = 1.2;
   }
   if (opts.tThreshEnd !== undefined) {
-    // Punkt für Messende
     let x = pad + (w-2*pad) * ((opts.tThreshEnd-tStart)/(tEnd-tStart));
+    // Vertikale gestrichelte Linie
+    ctx.beginPath();
+    ctx.moveTo(x, y0);
+    ctx.lineTo(x, h-pad);
+    ctx.stroke();
+    // Zeitwert angeben
+    ctx.setLineDash([]);
+    ctx.textAlign = 'center';
+    ctx.font = '11px Segoe UI';
+    ctx.fillText(opts.tThreshEnd.toFixed(2)+'s', x, h-pad+28);
+    ctx.setLineDash([6, 6]);
+    // Marker-Kreis
     let idx = data.findIndex(d => d.t >= opts.tThreshEnd);
     let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
     ctx.beginPath();
@@ -558,7 +592,11 @@ function showAccPlot(data, returnPNG=false, opts={}) {
     ctx.strokeStyle = '#222';
     ctx.lineWidth = 2;
     ctx.stroke();
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#0097e6';
+    ctx.lineWidth = 1.2;
   }
+  ctx.setLineDash([]);
 
   if (!returnPNG) {
     plotDiv.appendChild(canvas);
