@@ -639,17 +639,26 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   if (tEvalStart !== undefined) {
     // Suche Punkt mit exakt passender Zeit (egal ob interpoliert oder echter Messwert)
     let idx = data.findIndex(d => Math.abs(d.t - tEvalStart) < 1e-6);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalStart);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    let d;
     if (idx >= 0) {
-      let d = data[idx];
+      d = data[idx];
+    } else {
+      // Fallback: Interpolieren zwischen den beiden umgebenden Punkten
+      let before = null, after = null;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i-1].t <= tEvalStart && data[i].t >= tEvalStart) {
+          before = data[i-1];
+          after = data[i];
+          break;
+        }
+      }
+      if (before && after) {
+        let frac = (tEvalStart - before.t) / (after.t - before.t);
+        let aInterp = before.a + frac * (after.a - before.a);
+        d = { t: tEvalStart, a: aInterp };
+      }
+    }
+    if (d) {
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
       let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
       // Punkt
@@ -680,17 +689,26 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   if (tEvalEnd !== undefined) {
     // Suche Punkt mit exakt passender Zeit (egal ob interpoliert oder echter Messwert)
     let idx = data.findIndex(d => Math.abs(d.t - tEvalEnd) < 1e-6);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalEnd);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    let d;
     if (idx >= 0) {
-      let d = data[idx];
+      d = data[idx];
+    } else {
+      // Fallback: Interpolieren zwischen den beiden umgebenden Punkten
+      let before = null, after = null;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i-1].t <= tEvalEnd && data[i].t >= tEvalEnd) {
+          before = data[i-1];
+          after = data[i];
+          break;
+        }
+      }
+      if (before && after) {
+        let frac = (tEvalEnd - before.t) / (after.t - before.t);
+        let aInterp = before.a + frac * (after.a - before.a);
+        d = { t: tEvalEnd, a: aInterp };
+      }
+    }
+    if (d) {
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
       let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
       // Punkt
