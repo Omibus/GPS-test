@@ -492,14 +492,45 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
   ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
-  // --- Plot der Kurve ---
+  // --- Plot der Kurve mit Hervorhebung des Auswerteintervalls ---
   const graphLineWidth = 2;
-  ctx.strokeStyle = '#e84118';
   ctx.lineWidth = graphLineWidth;
+  let tEvalStart = opts.tThreshStart;
+  let tEvalEnd = opts.tThreshEnd;
+  // 1. Vor dem Auswerteintervall (grau)
+  ctx.strokeStyle = '#bbb';
   ctx.beginPath();
   let first = true;
   for (let i=0; i<data.length; i++) {
     if (data[i].t < tStart || data[i].t > tEnd) continue;
+    if (tEvalStart !== undefined && data[i].t >= tEvalStart) break;
+    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
+    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
+    if (first) { ctx.moveTo(x,y); first = false; }
+    else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // 2. Auswerteintervall (rot)
+  ctx.strokeStyle = '#e84118';
+  ctx.beginPath();
+  first = true;
+  for (let i=0; i<data.length; i++) {
+    if (data[i].t < tStart || data[i].t > tEnd) continue;
+    if (tEvalStart !== undefined && data[i].t < tEvalStart) continue;
+    if (tEvalEnd !== undefined && data[i].t > tEvalEnd) break;
+    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
+    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
+    if (first) { ctx.moveTo(x,y); first = false; }
+    else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // 3. Nach dem Auswerteintervall (grau)
+  ctx.strokeStyle = '#bbb';
+  ctx.beginPath();
+  first = true;
+  for (let i=0; i<data.length; i++) {
+    if (data[i].t < tStart || data[i].t > tEnd) continue;
+    if (tEvalEnd === undefined || data[i].t <= tEvalEnd) continue;
     let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
     let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
     if (first) { ctx.moveTo(x,y); first = false; }
