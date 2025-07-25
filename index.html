@@ -91,6 +91,7 @@
   <script>
 let measuring = false;
 let waitingForDecel = false;
+let postStopTimeout = null;
 let startTime = null;
 let stopTime = null;
 let decelThreshold = 2;
@@ -103,10 +104,14 @@ let distance = 0;
 let lastSpeed = 0;
 let watchId = null;
 let results = [];
-let accHistory = []; // Für Plot und Mittelwert
-let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (letzte 4s)
+let accHistory = []; // Für Plot und Mittelwert (Messintervall inkl. Vor- und Nachlauf)
+let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (1s Vorlauf)
 let accHistories = []; // Für Excel-Export
 let plotPNGs = []; // Für Anzeige der Historie
+const ACC_BUFFER_SEC = 1.0; // 1s Vorlauf
+const ACC_BUFFER_MAXLEN = Math.round(ACC_BUFFER_SEC / 0.02); // ca. 50 Werte bei 50Hz
+let postStopActive = false;
+let postStopStart = null;
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -268,7 +273,7 @@ document.getElementById('clearWinkelZ').onclick = function() {
     }
 
 
-// EINZIGER devicemotion-Handler für Messung und Kalibrierung
+// EINZIGER devicemotion-Handler für Messung und Kalibrierung, inkl. accBuffer, Trigger, Nachlauf
 window.addEventListener('devicemotion', function(event) {
   window.lastAccInclGrav = event.accelerationIncludingGravity;
   // Kalibrierung break
@@ -336,7 +341,7 @@ window.addEventListener('devicemotion', function(event) {
       breakGravAccs = [];
     }
   }
-  // --- Mess-Logik ---
+  // --- Mess-Logik mit accBuffer, Trigger, Nachlauf ---
   let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
   if (!acc) return;
   let wx = parseFloat(document.getElementById('winkelX').value) || 0;
@@ -354,18 +359,34 @@ window.addEventListener('devicemotion', function(event) {
     a = vec[direction] || 0;
   }
   document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
-  // --- Messung starten, wenn Schwellenwert überschritten ---
-  if (waitingForDecel && Math.abs(a) >= decelThreshold) {
+
+  // --- accBuffer: Rohdatenpuffer für 1s Vorlauf ---
+  let now = performance.now();
+  let bufferT = accBuffer.length > 0 ? accBuffer[accBuffer.length-1].t : now;
+  let dt = event.interval ? event.interval / 1000 : 0.02;
+  accBuffer.push({t: now, a: a});
+  // Buffer auf 1s begrenzen
+  while (accBuffer.length > ACC_BUFFER_MAXLEN) accBuffer.shift();
+
+  // --- Trigger-Logik: Start nur bei negativem a (Bremsen) und Überschreiten des Schwellenwerts ---
+  if (waitingForDecel && a <= -Math.abs(decelThreshold)) {
     measuring = true;
     waitingForDecel = false;
-    startTime = performance.now();
+    postStopActive = false;
+    postStopStart = null;
+    startTime = now;
     startSpeed = currentSpeed;
-    accHistory = [];
-    accHistory.push({t: 0, a: a});
+    // accHistory beginnt mit accBuffer (1s Vorlauf)
+    let t0 = accBuffer[0].t;
+    accHistory = accBuffer.map(d => ({t: (d.t-t0)/1000, a: d.a}));
     document.getElementById('status').innerHTML = 'Messung läuft...';
   }
+
+  // --- Messung läuft ---
   if (measuring) {
-    let dt = event.interval ? event.interval / 1000 : 0.02;
+    // Zeit relativ zum Start
+    let t = (now - startTime) / 1000;
+    // Geschwindigkeit und Strecke
     startSpeed = startSpeed || currentSpeed;
     startSpeed = Math.max(0, startSpeed);
     startSpeed = isNaN(startSpeed) ? 0 : startSpeed;
@@ -376,50 +397,61 @@ window.addEventListener('devicemotion', function(event) {
     if (currentSpeed < 0) currentSpeed = 0;
     distance += currentSpeed * dt;
     // Verzögerung und Zeit für Plot speichern
-    let t = (performance.now() - startTime) / 1000;
     accHistory.push({t: t, a: a});
-    if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold) {
-      measuring = false;
-      stopTime = performance.now();
-      let time = ((stopTime - startTime) / 1000).toFixed(2);
-      // Mittelwert der Verzögerung berechnen
-      let meanA = 0;
-      if (accHistory.length > 1) {
-        let sum = 0;
-        for (let i = 1; i < accHistory.length; i++) {
-          let dt = accHistory[i].t - accHistory[i-1].t;
-          sum += Math.abs(accHistory[i].a) * dt;
+
+    // --- Stop-Trigger: Stop, wenn a wieder über -stopThreshold steigt (also Bremsen vorbei) ---
+    if (!postStopActive && a >= -Math.abs(stopThreshold)) {
+      postStopActive = true;
+      postStopStart = now;
+    }
+    // --- Nachlauf: 1s nach Stop-Trigger weiter aufzeichnen ---
+    if (postStopActive) {
+      if (now - postStopStart >= 1000) {
+        measuring = false;
+        stopTime = now;
+        let time = ((stopTime - startTime) / 1000).toFixed(2);
+        // Mittelwert der Verzögerung berechnen
+        let meanA = 0;
+        if (accHistory.length > 1) {
+          let sum = 0;
+          for (let i = 1; i < accHistory.length; i++) {
+            let dt = accHistory[i].t - accHistory[i-1].t;
+            sum += Math.abs(accHistory[i].a) * dt;
+          }
+          meanA = sum / (accHistory[accHistory.length-1].t);
         }
-        meanA = sum / (accHistory[accHistory.length-1].t);
+        // Vergleichsbremsweg bei konstanter Verzögerung
+        let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
+        // Alternative Methode: normierte Verzögerungskurve
+        let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
+        document.getElementById('result').innerHTML =
+          `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
+          `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+          `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+          `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
+        document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+        // Plot anzeigen und PNG für Historie erzeugen (wird später für 2 Plots erweitert)
+        let png = showAccPlot(accHistory, true);
+        plotPNGs.push(png);
+        // Messwerte für Excel speichern
+        accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
+        // Ergebnis speichern und anzeigen
+        results.push({
+          time: time,
+          startSpeed: startSpeed.toFixed(2),
+          distance: distance.toFixed(2),
+          vergleichsweg: vergleichsweg.toFixed(2),
+          meanA: meanA.toFixed(2),
+          normBremsweg: normBremsweg.toFixed(2)
+        });
+        updateResultsList();
+        // App zurücksetzen für neue Messung
+        waitingForDecel = false;
+        measuring = false;
+        postStopActive = false;
+        postStopStart = null;
+        accBuffer = [];
       }
-      // Vergleichsbremsweg bei konstanter Verzögerung
-      let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
-      // Alternative Methode: normierte Verzögerungskurve
-      let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
-      document.getElementById('result').innerHTML =
-        `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
-        `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-        `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-        `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
-      document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-      // Plot anzeigen und PNG für Historie erzeugen
-      let png = showAccPlot(accHistory, true);
-      plotPNGs.push(png);
-      // Messwerte für Excel speichern
-      accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
-      // Ergebnis speichern und anzeigen
-      results.push({
-        time: time,
-        startSpeed: startSpeed.toFixed(2),
-        distance: distance.toFixed(2),
-        vergleichsweg: vergleichsweg.toFixed(2),
-        meanA: meanA.toFixed(2),
-        normBremsweg: normBremsweg.toFixed(2)
-      });
-      updateResultsList();
-      // App zurücksetzen für neue Messung
-      waitingForDecel = false;
-      measuring = false;
     }
   }
 });
