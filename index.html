@@ -509,110 +509,65 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
   // --- Plot der Kurve mit Hervorhebung des Auswerteintervalls ---
+  // Wir zeichnen eine durchgehende Linie durch alle Punkte (inkl. interpolierte)
+  // und färben die Linie je nach Bereich unterschiedlich ein.
   const graphLineWidth = 2;
   ctx.lineWidth = graphLineWidth;
-  let tEvalStart = opts.tThreshStart;
-  let tEvalEnd = opts.tThreshEnd;
-  // 1. Vor dem Auswerteintervall (grau)
-  ctx.strokeStyle = '#bbb';
-  ctx.beginPath();
-  let first = true;
-  for (let i=0; i<data.length; i++) {
-    if (data[i].t < tStart || data[i].t > tEnd) continue;
-    if (tEvalStart !== undefined && data[i].t >= tEvalStart) break;
-    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
-    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
-    if (first) { ctx.moveTo(x,y); first = false; }
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  // 1b. Gerade im Bereich der Start-Interpolation (falls vorhanden)
-  if (tEvalStart !== undefined) {
-    // Finde den interpolierten Punkt (falls vorhanden)
-    let idx = data.findIndex(d => d.t === tEvalStart && d._interpolated);
-    if (idx > 0) {
-      let d0 = data[idx-1];
-      let d1 = data[idx];
-      let x0 = pad + (w-2*pad) * ((d0.t-tStart)/(tEnd-tStart));
-      let y0 = h-pad - (h-2*pad) * ((d0.a-amin)/(amax-amin));
-      let x1 = pad + (w-2*pad) * ((d1.t-tStart)/(tEnd-tStart));
-      let y1 = h-pad - (h-2*pad) * ((d1.a-amin)/(amax-amin));
-      ctx.strokeStyle = '#bbb';
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    }
-  }
-  // 2. Auswerteintervall (rot)
-  ctx.strokeStyle = '#e84118';
-  ctx.beginPath();
-  first = true;
-  for (let i=0; i<data.length; i++) {
-    if (data[i].t < tStart || data[i].t > tEnd) continue;
-    if (tEvalStart !== undefined && data[i].t < tEvalStart) continue;
-    if (tEvalEnd !== undefined && data[i].t > tEvalEnd) break;
-    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
-    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
-    if (first) { ctx.moveTo(x,y); first = false; }
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-  // 2b. Gerade im Bereich der End-Interpolation (falls vorhanden)
-  if (tEvalEnd !== undefined) {
-    let idx = data.findIndex(d => d.t === tEvalEnd && d._interpolated);
-    if (idx > 0) {
-      let d0 = data[idx-1];
-      let d1 = data[idx];
-      let x0 = pad + (w-2*pad) * ((d0.t-tStart)/(tEnd-tStart));
-      let y0 = h-pad - (h-2*pad) * ((d0.a-amin)/(amax-amin));
-      let x1 = pad + (w-2*pad) * ((d1.t-tStart)/(tEnd-tStart));
-      let y1 = h-pad - (h-2*pad) * ((d1.a-amin)/(amax-amin));
-      ctx.strokeStyle = '#e84118';
-      ctx.beginPath();
-      ctx.moveTo(x0, y0);
-      ctx.lineTo(x1, y1);
-      ctx.stroke();
-    }
-  }
-  // 3. Nach dem Auswerteintervall (grau)
-  ctx.strokeStyle = '#bbb';
-  ctx.beginPath();
-  first = true;
-  for (let i=0; i<data.length; i++) {
-    if (data[i].t < tStart || data[i].t > tEnd) continue;
-    if (tEvalEnd === undefined || data[i].t <= tEvalEnd) continue;
-    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
-    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
-    if (first) { ctx.moveTo(x,y); first = false; }
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
 
-  // --- Schwellenwert-Marker ---
-  if (opts.tThreshStart !== undefined) {
-    let x = pad + (w-2*pad) * ((opts.tThreshStart-tStart)/(tEnd-tStart));
-    let idx = data.findIndex(d => d.t >= opts.tThreshStart);
-    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
+  // Hilfsfunktion: Bereichsfarbe bestimmen
+  function getColor(t) {
+    if (opts.tThreshStart !== undefined && t < opts.tThreshStart) return '#bbb';
+    if (opts.tThreshEnd !== undefined && t > opts.tThreshEnd) return '#bbb';
+    return '#e84118';
+  }
+
+  // Linie durch alle Punkte, Farbe je nach Bereich
+  for (let i = 1; i < data.length; i++) {
+    let t0 = data[i-1].t, t1 = data[i].t;
+    let a0 = data[i-1].a, a1 = data[i].a;
+    let x0 = pad + (w-2*pad) * ((t0-tStart)/(tEnd-tStart));
+    let y0p = h-pad - (h-2*pad) * ((a0-amin)/(amax-amin));
+    let x1 = pad + (w-2*pad) * ((t1-tStart)/(tEnd-tStart));
+    let y1p = h-pad - (h-2*pad) * ((a1-amin)/(amax-amin));
+    ctx.strokeStyle = getColor((t0 + t1) / 2);
     ctx.beginPath();
-    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
-    ctx.fillStyle = '#44bd32';
-    ctx.fill();
-    ctx.strokeStyle = '#44bd32';
-    ctx.lineWidth = 1.2;
+    ctx.moveTo(x0, y0p);
+    ctx.lineTo(x1, y1p);
     ctx.stroke();
   }
+
+  // --- Schwellenwert-Marker exakt auf interpolierten Punkten ---
+  // Marker für Start
+  if (opts.tThreshStart !== undefined) {
+    let idx = data.findIndex(d => d.t === opts.tThreshStart && d._interpolated);
+    if (idx >= 0) {
+      let d = data[idx];
+      let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
+      let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
+      ctx.beginPath();
+      ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
+      ctx.fillStyle = '#44bd32';
+      ctx.fill();
+      ctx.strokeStyle = '#44bd32';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
+  }
+  // Marker für Ende
   if (opts.tThreshEnd !== undefined) {
-    let x = pad + (w-2*pad) * ((opts.tThreshEnd-tStart)/(tEnd-tStart));
-    let idx = data.findIndex(d => d.t >= opts.tThreshEnd);
-    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
-    ctx.beginPath();
-    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
-    ctx.fillStyle = '#e84118';
-    ctx.fill();
-    ctx.strokeStyle = '#e84118';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
+    let idx = data.findIndex(d => d.t === opts.tThreshEnd && d._interpolated);
+    if (idx >= 0) {
+      let d = data[idx];
+      let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
+      let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
+      ctx.beginPath();
+      ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
+      ctx.fillStyle = '#e84118';
+      ctx.fill();
+      ctx.strokeStyle = '#e84118';
+      ctx.lineWidth = 1.2;
+      ctx.stroke();
+    }
   }
 
   if (!returnPNG) {
@@ -775,6 +730,51 @@ window.addEventListener('devicemotion', function(event) {
     input.value = val.toFixed(1);
     input.dispatchEvent(new Event('input'));
   };
+  document.getElementById('stopLeft').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val - 0.1);
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('stopRight').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = val + 0.1;
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
+  </script>
+  <script>
+    // --- Bildschirm-anhalten/Wake Lock ---
+    let wakeLock = null;
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
+          wakeLock.addEventListener('release', () => {
+            document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
+          });
+        } catch (err) {
+          document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
+        }
+      } else {
+        document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
+      }
+    }
+    // Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+      else if (wakeLock) { wakeLock.release(); wakeLock = null; }
+    });
+    window.addEventListener('touchstart', requestWakeLock, { once: true });
+    window.addEventListener('mousedown', requestWakeLock, { once: true });
+    // Optional: direkt beim Laden versuchen
+    requestWakeLock();
+  </script>
+</body>
+</html>
   document.getElementById('stopLeft').onclick = function() {
     let input = document.getElementById('stopThreshold');
     let val = parseFloat(input.value) || 0;
