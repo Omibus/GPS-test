@@ -362,18 +362,25 @@ document.getElementById('clearWinkelZ').onclick = function() {
             let tCross = null;
             // Fall 1: Betrag unterschreitet Schwellenwert
             if (prevAbsA >= stopThreshold && currAbsA < stopThreshold) {
-              let a1 = prevAbsA;
-              let a2 = currAbsA;
-              let frac = (a1 - stopThreshold) / (a1 - a2);
+              let a1 = prevA;
+              let a2 = currA;
+              let absA1 = prevAbsA;
+              let absA2 = currAbsA;
+              let frac = (absA1 - stopThreshold) / (absA1 - absA2);
+              // Interpolierter Wert für exakten Schwellenwert-Zeitpunkt
               tCross = t1 + frac * (t2 - t1);
+              let aInterp = a1 + frac * (a2 - a1);
+              // Füge interpolierten Endpunkt in accHistory ein
+              accHistory.push({ t: (tCross - window._t0Abs)/1000, a: aInterp, absTime: tCross, _interpolated: true });
             }
             // Fall 2: Vorzeichenwechsel (a1 * a2 < 0)
             else if (prevA * currA < 0) {
-              // Interpolation für Nulldurchgang
               let a1 = prevA;
               let a2 = currA;
               let frac = -a1 / (a2 - a1);
               tCross = t1 + frac * (t2 - t1);
+              let aInterp = 0;
+              accHistory.push({ t: (tCross - window._t0Abs)/1000, a: aInterp, absTime: tCross, _interpolated: true });
             }
             if (tCross !== null) {
               window._tThreshEndAbs = tCross;
@@ -395,14 +402,49 @@ document.getElementById('clearWinkelZ').onclick = function() {
                     if (seen.has(key)) return false;
                     seen.add(key); return true;
                   });
+                  // --- Im Auswerteblock (nach Messende) ---
                   // Effektive Bremszeit: Zeit zwischen erstem und zweitem Schwellenwert
                   let tStartThresh = window._tThreshStartRel || 0;
                   let tEndThresh = window._tThreshEndRel || (accHistory[accHistory.length-1]?.t || 0);
-                  let brakeTime = (tEndThresh - tStartThresh);
-                  let time = brakeTime.toFixed(2);
 
                   // Nur Werte im Bremsintervall für Auswertung verwenden
                   let brakeData = accHistory.filter(d => d.t >= tStartThresh && d.t <= tEndThresh);
+
+                  // --- Interpolierte Schwellenwertpunkte für exaktes Intervall einfügen (falls nötig) ---
+                  // Startpunkt
+                  if (brakeData.length === 0 || Math.abs(brakeData[0].t - tStartThresh) > 1e-6) {
+                    let before = null, after = null;
+                    for (let i = 1; i < accHistory.length; i++) {
+                      if (accHistory[i-1].t <= tStartThresh && accHistory[i].t >= tStartThresh) {
+                        before = accHistory[i-1];
+                        after = accHistory[i];
+                        break;
+                      }
+                    }
+                    if (before && after) {
+                      let frac = (tStartThresh - before.t) / (after.t - before.t);
+                      let aInterp = before.a + frac * (after.a - before.a);
+                      brakeData.unshift({ t: tStartThresh, a: aInterp, _interpolated: true });
+                    }
+                  }
+                  // Endpunkt
+                  if (brakeData.length === 0 || Math.abs(brakeData[brakeData.length-1].t - tEndThresh) > 1e-6) {
+                    let before = null, after = null;
+                    for (let i = 1; i < accHistory.length; i++) {
+                      if (accHistory[i-1].t <= tEndThresh && accHistory[i].t >= tEndThresh) {
+                        before = accHistory[i-1];
+                        after = accHistory[i];
+                        break;
+                      }
+                    }
+                    if (before && after) {
+                      let frac = (tEndThresh - before.t) / (after.t - before.t);
+                      let aInterp = before.a + frac * (after.a - before.a);
+                      brakeData.push({ t: tEndThresh, a: aInterp, _interpolated: true });
+                    }
+                  }
+
+                  // --- Bremsweg-Berechnung verwendet brakeData ---
                   // Mittelwert der Verzögerung berechnen (geglättet)
                   let meanA = 0;
                   if (brakeData.length > 1) {
@@ -613,19 +655,36 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   // --- Schwellenwert-Marker und Zeitmarken ---
   // Marker für Start (grün)
   if (tEvalStart !== undefined) {
-    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalStart
-    let idx = data.findIndex(d => d.t === tEvalStart && d._interpolated);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalStart);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    // Suche Punkt mit exakt passender Zeit (egal ob interpoliert oder echter Messwert)
+    let idx = data.findIndex(d => Math.abs(d.t - tEvalStart) < 1e-6);
+    let d;
     if (idx >= 0) {
-      let d = data[idx];
+      d = { t: tEvalStart, a: undefined };
+      // Setze a exakt auf den Schwellenwert (Vorzeichen wie im Datenpunkt)
+      let orig = data[idx];
+      if (orig && typeof orig.a === "number") {
+        d.a = (orig.a >= 0) ? Math.abs(decelThreshold) : -Math.abs(decelThreshold);
+      }
+    } else {
+      // Fallback: Interpolieren zwischen den beiden umgebenden Punkten
+      let before = null, after = null;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i-1].t <= tEvalStart && data[i].t >= tEvalStart) {
+          before = data[i-1];
+          after = data[i];
+          break;
+        }
+      }
+      if (before && after) {
+        // Interpolationsrichtung: Schwellenwert kann positiv oder negativ sein
+        let sign = (before.a <= after.a) ? 1 : -1;
+        let aInterp = (typeof decelThreshold !== "undefined")
+          ? sign * Math.abs(decelThreshold)
+          : before.a + ((tEvalStart - before.t) / (after.t - before.t)) * (after.a - before.a);
+        d = { t: tEvalStart, a: aInterp };
+      }
+    }
+    if (d && typeof d.a === "number") {
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
       let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
       // Punkt
@@ -654,19 +713,36 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   }
   // Marker für Ende (blau)
   if (tEvalEnd !== undefined) {
-    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalEnd
-    let idx = data.findIndex(d => d.t === tEvalEnd && d._interpolated);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalEnd);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    // Suche Punkt mit exakt passender Zeit (egal ob interpoliert oder echter Messwert)
+    let idx = data.findIndex(d => Math.abs(d.t - tEvalEnd) < 1e-6);
+    let d;
     if (idx >= 0) {
-      let d = data[idx];
+      d = { t: tEvalEnd, a: undefined };
+      // Setze a exakt auf den Schwellenwert (Vorzeichen wie im Datenpunkt)
+      let orig = data[idx];
+      if (orig && typeof orig.a === "number") {
+        d.a = (orig.a >= 0) ? Math.abs(stopThreshold) : -Math.abs(stopThreshold);
+      }
+    } else {
+      // Fallback: Interpolieren zwischen den beiden umgebenden Punkten
+      let before = null, after = null;
+      for (let i = 1; i < data.length; i++) {
+        if (data[i-1].t <= tEvalEnd && data[i].t >= tEvalEnd) {
+          before = data[i-1];
+          after = data[i];
+          break;
+        }
+      }
+      if (before && after) {
+        // Interpolationsrichtung: Schwellenwert kann positiv oder negativ sein
+        let sign = (before.a <= after.a) ? 1 : -1;
+        let aInterp = (typeof stopThreshold !== "undefined")
+          ? sign * Math.abs(stopThreshold)
+          : before.a + ((tEvalEnd - before.t) / (after.t - before.t)) * (after.a - before.a);
+        d = { t: tEvalEnd, a: aInterp };
+      }
+    }
+    if (d && typeof d.a === "number") {
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
       let y = h-pad - (h-2*pad) * ((d.a-amin)/(amax-amin));
       // Punkt
