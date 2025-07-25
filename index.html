@@ -348,11 +348,14 @@ document.getElementById('clearWinkelZ').onclick = function() {
         let tThresh = startTime;
         let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
         let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
+        // Zeitachse: erster Wert im Vorlauf ist t=0, alle weiteren Werte darauf bezogen
         accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a }));
         // Ersten Messwert (Schwellenwertüberschreitung) anhängen, falls nicht schon enthalten
         if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
           accHistory.push({ t: (tThresh - t0)/1000, a: a });
         }
+        // Merke den relativen Zeitpunkt des Schwellenwerts für späteren Plot
+        window._tThreshStartRel = (tThresh - t0)/1000;
         document.getElementById('status').innerHTML = 'Messung läuft...';
       }
       if (measuring) {
@@ -408,11 +411,11 @@ document.getElementById('clearWinkelZ').onclick = function() {
               document.getElementById('status').innerHTML = 'Stillstand erkannt.';
               // Plot anzeigen und PNG für Historie erzeugen (geglättet)
               // Schwellenwertpunkte suchen
-              let idxStart = accHistory.findIndex(d => Math.abs(d.a) >= decelThreshold);
-              if (idxStart === -1) idxStart = 0;
-              let tStartThresh = accHistory[idxStart]?.t || 0;
+              // Schwellenwert-Zeitpunkte korrekt auf die Zeitachse von accHistory mappen
+              let tStartThresh = window._tThreshStartRel || 0;
+              // tEndThresh: Zeitpunkt, an dem Stop-Schwellenwert erstmals unterschritten wurde (relativ zu t0)
               let idxEnd = accHistory.length-1;
-              for (let i=idxStart+1; i<accHistory.length; i++) {
+              for (let i=accHistory.length-1; i>=0; i--) {
                 if (Math.abs(accHistory[i].a) <= stopThreshold) { idxEnd = i; break; }
               }
               let tEndThresh = accHistory[idxEnd]?.t || accHistory[accHistory.length-1]?.t || 0;
@@ -425,6 +428,7 @@ document.getElementById('clearWinkelZ').onclick = function() {
                 tThreshStart: tStartThresh,
                 tThreshEnd: tEndThresh
               });
+              window._tThreshStartRel = undefined;
               plotPNGs.push(png);
               // Messwerte für Excel speichern (geglättet)
               accHistories.push(smoothHist.map(d => ({t: d.t, a: d.a})));
