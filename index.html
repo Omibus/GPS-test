@@ -122,6 +122,13 @@ let postStopStart = null;
       startTime = null;
       stopTime = null;
       distance = 0;
+      // Nachlauf-Timeout und Hilfsvariablen zurücksetzen
+      if (window._postStopTimeout) { clearTimeout(window._postStopTimeout); window._postStopTimeout = null; }
+      window._tThreshStartRel = undefined;
+      window._tThreshEndRel = undefined;
+      window._t0Abs = undefined;
+      window._tThreshAbs = undefined;
+      window._tThreshEndAbs = undefined;
       document.getElementById('result').innerHTML = '';
       document.getElementById('status').innerHTML = 'Warte auf Verzögerung...';
       document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
