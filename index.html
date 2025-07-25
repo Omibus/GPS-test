@@ -790,5 +790,33 @@ window.addEventListener('devicemotion', function(event) {
     input.dispatchEvent(new Event('input'));
   };
   </script>
+  <script>
+    // --- Bildschirm-anhalten/Wake Lock ---
+    let wakeLock = null;
+    async function requestWakeLock() {
+      if ('wakeLock' in navigator) {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
+          wakeLock.addEventListener('release', () => {
+            document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
+          });
+        } catch (err) {
+          document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
+        }
+      } else {
+        document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
+      }
+    }
+    // Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') requestWakeLock();
+      else if (wakeLock) { wakeLock.release(); wakeLock = null; }
+    });
+    window.addEventListener('touchstart', requestWakeLock, { once: true });
+    window.addEventListener('mousedown', requestWakeLock, { once: true });
+    // Optional: direkt beim Laden versuchen
+    requestWakeLock();
+  </script>
 </body>
 </html>
