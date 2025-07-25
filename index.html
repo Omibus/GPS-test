@@ -26,6 +26,9 @@
       color: #222;
       box-sizing: border-box;
     }
+    .inline-btn-clear { color:#e84118; font-size:1.3em; }
+    .inline-btn:active, .inline-btn-clear:active { background:#ddd; }
+    .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     button:disabled { background: #aaa; }
     .result { margin-top: 2rem; background: #f0f0f0; padding: 1rem; border-radius: 0.5rem; }
@@ -86,58 +89,24 @@
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
   </div>
   <script>
-    let measuring = false;
-    let waitingForDecel = false;
-    let startTime = null;
-    let stopTime = null;
-    let decelThreshold = 2;
-    let stopThreshold = 0.3;
-    let direction = 'y';
-    let useGravity = false;
-    let startSpeed = 0;
-    let currentSpeed = 0;
-    let distance = 0;
-    let lastSpeed = 0;
-    let watchId = null;
-    let results = [];
+let measuring = false;
+let waitingForDecel = false;
+let startTime = null;
+let stopTime = null;
+let decelThreshold = 2;
+let stopThreshold = 0.3;
+let direction = 'y';
+let useGravity = false;
+let startSpeed = 0;
+let currentSpeed = 0;
+let distance = 0;
+let lastSpeed = 0;
+let watchId = null;
+let results = [];
 let accHistory = []; // Für Plot und Mittelwert
-let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (letzte 3s)
-    let accHistories = []; // Für Excel-Export
-    let plotPNGs = []; // Für Anzeige der Historie
-
-    // Wake Lock API: Bildschirm immer an lassen, solange App im Vordergrund
-    let wakeLock = null;
-    async function requestWakeLock() {
-      try {
-        wakeLock = await navigator.wakeLock.request('screen');
-        wakeLock.addEventListener('release', () => {
-          console.log('Wake Lock wurde freigegeben');
-        });
-      } catch (err) {
-        console.error('Wake Lock Fehler:', err);
-      }
-    }
-    function releaseWakeLock() {
-      if (wakeLock) {
-        wakeLock.release();
-        wakeLock = null;
-      }
-    }
-    // Wake Lock anfordern, wenn Seite sichtbar ist
-    async function handleVisibilityChange() {
-      if (document.visibilityState === 'visible' && 'wakeLock' in navigator) {
-        await requestWakeLock();
-      } else {
-        releaseWakeLock();
-      }
-    }
-    if ('wakeLock' in navigator) {
-      document.addEventListener('visibilitychange', handleVisibilityChange);
-      window.addEventListener('focus', handleVisibilityChange);
-      window.addEventListener('blur', releaseWakeLock);
-      // Direkt beim Laden versuchen
-      handleVisibilityChange();
-    }
+let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (letzte 4s)
+let accHistories = []; // Für Excel-Export
+let plotPNGs = []; // Für Anzeige der Historie
 
     document.getElementById('startBtn').onclick = function() {
       decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
@@ -197,52 +166,37 @@ document.getElementById('clearWinkelZ').onclick = function() {
       updateResultsList();
     };
 
-
-
-    // Gleitender Mittelwert für Glättung, nur im mittleren Bereich
-    function smoothAccHistoryPartial(accHistory, windowSize = 5, startOffset = 3, endOffset = 4) {
-      const n = accHistory.length;
-      if (n < 2) return accHistory;
-      let smoothed = [];
-      for (let i = 0; i < n; i++) {
-        // Ränder: unglättet lassen
-        if (i < startOffset || i >= n - endOffset) {
-          smoothed.push({ t: accHistory[i].t, a: accHistory[i].a });
-        } else {
-          let sum = 0, count = 0;
-          for (let j = Math.max(0, i - Math.floor(windowSize/2)); j <= Math.min(n - 1, i + Math.floor(windowSize/2)); j++) {
-            sum += accHistory[j].a;
-            count++;
-          }
-          smoothed.push({ t: accHistory[i].t, a: sum / count });
-        }
-      }
-      return smoothed;
-    }
-
     function calcNormBremsweg(accHistory, startSpeed, bremszeit) {
-      // Glättung nur im mittleren Bereich anwenden
-      let smoothHist = smoothAccHistoryPartial(accHistory);
-      let n = smoothHist.length;
-      if (n < 2) return 0;
-      let v = [parseFloat(startSpeed)];
-      for (let i=1; i<n; i++) {
-        let dt = smoothHist[i].t - smoothHist[i-1].t;
-        v[i] = v[i-1] - smoothHist[i].a * dt;
-      }
-      let norm = v[n-1] !== 0 ? v[0] / (v[0] - v[n-1]) : 1;
-      let vNorm = [v[0]];
-      for (let i=1; i<n; i++) {
-        let dt = smoothHist[i].t - smoothHist[i-1].t;
-        vNorm[i] = vNorm[i-1] - smoothHist[i].a * norm * dt;
-      }
-      let s = 0;
-      for (let i=1; i<n; i++) {
-        let dt = smoothHist[i].t - smoothHist[i-1].t;
-        s += (vNorm[i-1] + vNorm[i]) / 2 * dt;
-      }
-      return s;
-    }
+  // 1. Normiere die Verzögerungskurve so, dass die Geschwindigkeit am Ende 0 ist
+  // 2. Integriere die Geschwindigkeit über die Zeit für den Bremsweg
+  let n = accHistory.length;
+  if (n < 2) return 0;
+  // Zeitdifferenzen und Roh-Integral der Verzögerung
+  let v = [parseFloat(startSpeed)];
+  let t0 = accHistory[0].t;
+  let tN = accHistory[n-1].t;
+  let dtSum = 0;
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    dtSum += dt;
+    v[i] = v[i-1] - accHistory[i].a * dt; // Roh-Geschwindigkeit
+  }
+  // Normierungsfaktor berechnen, damit v[n-1] = 0
+  let norm = v[n-1] !== 0 ? v[0] / (v[0] - v[n-1]) : 1;
+  // Normierte Verzögerungskurve
+  let vNorm = [v[0]];
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    vNorm[i] = vNorm[i-1] - accHistory[i].a * norm * dt;
+  }
+  // Bremsweg als Integral der normierten Geschwindigkeit
+  let s = 0;
+  for (let i=1; i<n; i++) {
+    let dt = accHistory[i].t - accHistory[i-1].t;
+    s += (vNorm[i-1] + vNorm[i]) / 2 * dt;
+  }
+  return s;
+}
 
     function updateResultsList() {
       const listDiv = document.getElementById('resultsList');
@@ -313,7 +267,76 @@ document.getElementById('clearWinkelZ').onclick = function() {
       return {x: x3, y: y3, z: z3};
     }
 
+
+// EINZIGER devicemotion-Handler für Messung und Kalibrierung
 window.addEventListener('devicemotion', function(event) {
+  window.lastAccInclGrav = event.accelerationIncludingGravity;
+  // Kalibrierung break
+  if (breakCalibState === 'waitForAccel') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    let aVec = [acc.x||0, acc.y||0, acc.z||0];
+    let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
+    if (aMag > ((window.breakDecelThreshold !== undefined ? window.breakDecelThreshold : 2))) {
+      breakCalibState = 'measureAccel';
+      breakAccs = [];
+      document.getElementById('status').innerHTML = 'Messe Bremsrichtung...';
+      if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
+      breakTimeout = setTimeout(function(){
+        breakCalibState = 'waitForStill';
+        breakGravAccs = [];
+        document.getElementById('status').innerHTML = `Warte auf Stillstand (<${window.breakStopThreshold !== undefined ? window.breakStopThreshold : 0.2} m/s² für 2s)...`;
+        breakTimeout = null;
+      }, 500);
+    }
+  }
+  if (breakCalibState === 'measureAccel') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    breakAccs.push([acc.x||0, acc.y||0, acc.z||0]);
+  }
+  if (breakCalibState === 'waitForStill') {
+    let acc = event.acceleration;
+    if (!acc) return;
+    let aVec = [acc.x||0, acc.y||0, acc.z||0];
+    let aMag = Math.sqrt(aVec[0]*aVec[0]+aVec[1]*aVec[1]+aVec[2]*aVec[2]);
+    if (aMag < ((window.breakStopThreshold !== undefined ? window.breakStopThreshold : 0.2))) {
+      breakGravAccs.push(window.lastAccInclGrav ? [window.lastAccInclGrav.x||0, window.lastAccInclGrav.y||0, window.lastAccInclGrav.z||0] : [0,0,0]);
+      if (breakGravAccs.length > 40) { // ca. 2s bei 20Hz
+        breakCalibState = 'done';
+        // Mittelwerte berechnen
+        let avgAccel = [0,0,0];
+        breakAccs.forEach(v=>{avgAccel[0]+=v[0];avgAccel[1]+=v[1];avgAccel[2]+=v[2];});
+        avgAccel = avgAccel.map(x=>x/(breakAccs.length||1));
+        let avgGrav = [0,0,0];
+        breakGravAccs.forEach(v=>{avgGrav[0]+=v[0];avgGrav[1]+=v[1];avgGrav[2]+=v[2];});
+        avgGrav = avgGrav.map(x=>x/(breakGravAccs.length||1));
+        // Normiere Vektoren
+        let norm = v => { let m=Math.sqrt(v[0]*v[0]+v[1]*v[1]+v[2]*v[2]); return m>0?[v[0]/m,v[1]/m,v[2]/m]:[0,0,1]; };
+        let yAxis = norm(avgAccel);
+        let zAxis = norm(avgGrav);
+        // Berechne Rotationsmatrix, dann Euler-Winkel
+        // x-Achse = y x z
+        let xAxis = [yAxis[1]*zAxis[2]-yAxis[2]*zAxis[1], yAxis[2]*zAxis[0]-yAxis[0]*zAxis[2], yAxis[0]*zAxis[1]-yAxis[1]*zAxis[0]];
+        // Rotation aus Basisvektoren
+        // ZYX-Konvention
+        let wx = Math.atan2(-yAxis[2],zAxis[2])*180/Math.PI;
+        let wy = Math.atan2(xAxis[2],Math.sqrt(xAxis[0]*xAxis[0]+xAxis[1]*xAxis[1]))*180/Math.PI;
+        let wz = Math.atan2(yAxis[0],yAxis[1])*180/Math.PI;
+        document.getElementById('winkelX').value = wx.toFixed(1);
+        document.getElementById('winkelY').value = wy.toFixed(1);
+        document.getElementById('winkelZ').value = wz.toFixed(1);
+        document.getElementById('status').innerHTML = 'Kalibrierung abgeschlossen.';
+        breakCalibState = null;
+        breakAccs = [];
+        breakGravAccs = [];
+        if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
+      }
+    } else {
+      breakGravAccs = [];
+    }
+  }
+  // --- Mess-Logik ---
   let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
   if (!acc) return;
   let wx = parseFloat(document.getElementById('winkelX').value) || 0;
@@ -330,59 +353,17 @@ window.addEventListener('devicemotion', function(event) {
   } else {
     a = vec[direction] || 0;
   }
-  // --- Kontinuierlicher Puffer für Rohdaten (letzte 4s) ---
-  let tNow = performance.now();
-  accBuffer.push({t: tNow, a: a});
-  while (accBuffer.length > 0 && (tNow - accBuffer[0].t) > 4000) accBuffer.shift();
   document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
-
   // --- Messung starten, wenn Schwellenwert überschritten ---
-  // --- Korrekte Trigger-Logik für Startschwellenwert (Vorzeichen beachten) ---
-  if (waitingForDecel) {
-    // Bestimme Richtung: positiv oder negativ
-    if (a >= decelThreshold) {
-      // Positiver Bremsvorgang
-      measuring = true;
-      waitingForDecel = false;
-      startTime = performance.now();
-      startSpeed = currentSpeed;
-      window._brakeSign = 1;
-      // --- accHistory mit 1s Vorlauf aus accBuffer füllen ---
-      let tThresh = startTime;
-      let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
-      let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
-      accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
-      if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
-        accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
-      }
-      window._tThreshStartRel = (tThresh - t0)/1000;
-      window._t0Abs = t0;
-      window._tThreshAbs = tThresh;
-      window._tThreshEndAbs = null;
-      document.getElementById('status').innerHTML = 'Messung läuft...';
-    } else if (a <= -decelThreshold) {
-      // Negativer Bremsvorgang
-      measuring = true;
-      waitingForDecel = false;
-      startTime = performance.now();
-      startSpeed = currentSpeed;
-      window._brakeSign = -1;
-      let tThresh = startTime;
-      let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
-      let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
-      accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
-      if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
-        accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
-      }
-      window._tThreshStartRel = (tThresh - t0)/1000;
-      window._t0Abs = t0;
-      window._tThreshAbs = tThresh;
-      window._tThreshEndAbs = null;
-      document.getElementById('status').innerHTML = 'Messung läuft...';
-    }
+  if (waitingForDecel && Math.abs(a) >= decelThreshold) {
+    measuring = true;
+    waitingForDecel = false;
+    startTime = performance.now();
+    startSpeed = currentSpeed;
+    accHistory = [];
+    accHistory.push({t: 0, a: a});
+    document.getElementById('status').innerHTML = 'Messung läuft...';
   }
-
-  // --- Während Messung: Werte kontinuierlich aufzeichnen ---
   if (measuring) {
     let dt = event.interval ? event.interval / 1000 : 0.02;
     startSpeed = startSpeed || currentSpeed;
@@ -396,148 +377,56 @@ window.addEventListener('devicemotion', function(event) {
     distance += currentSpeed * dt;
     // Verzögerung und Zeit für Plot speichern
     let t = (performance.now() - startTime) / 1000;
-    let absTime = performance.now();
-    accHistory.push({t: t, a: a, absTime: absTime});
-
-    // --- Stop-Schwellenwert erreicht? ---
-    // Kriterium: Je nach Richtung: positiver Bremsvorgang -> a <= stopThreshold, negativer -> a >= -stopThreshold
-    if (!window._tThreshEndAbs && window._brakeSign) {
-      if (
-        (window._brakeSign === 1 && a <= stopThreshold) ||
-        (window._brakeSign === -1 && a >= -stopThreshold)
-      ) {
-        window._tThreshEndAbs = absTime;
-        window._tThreshEndRel = (absTime - window._t0Abs)/1000;
-        // 1 Sekunde nach Stop noch weiter aufzeichnen
-        if (!window._postStopTimeout) {
-          window._postStopTimeout = setTimeout(function() {
-          measuring = false;
-          stopTime = performance.now();
-          // --- accHistory auf 1s nach Stop-Schwellenwert beschränken ---
-          let tEndAbs = window._tThreshEndAbs;
-          let t0 = window._t0Abs;
-          // Filter: nur Werte von t0 (1s vor Start) bis tEndAbs+1s behalten
-          accHistory = accHistory.filter(d => d.absTime >= t0 && d.absTime <= (tEndAbs + 1000));
-          // Zeitachse neu normieren: t=0 bei t0
-          accHistory = accHistory.map(d => ({ t: (d.absTime - t0)/1000, a: d.a }));
-          // Doppelte Zeitstempel entfernen
-          let seen = new Set();
-          accHistory = accHistory.filter(d => {
-            let key = d.t.toFixed(5);
-            if (seen.has(key)) return false;
-            seen.add(key); return true;
-          });
-          // Effektive Bremszeit: Zeit zwischen erstem und zweitem Schwellenwert
-          let tStartThresh = window._tThreshStartRel || 0;
-          let tEndThresh = window._tThreshEndRel || (accHistory[accHistory.length-1]?.t || 0);
-          let brakeTime = (tEndThresh - tStartThresh);
-          let time = brakeTime.toFixed(2);
-
-          // Nur Werte im Bremsintervall für Auswertung verwenden
-          let brakeData = accHistory.filter(d => d.t >= tStartThresh && d.t <= tEndThresh);
-          let smoothHist = smoothAccHistoryPartial(brakeData);
-          // Mittelwert der Verzögerung berechnen (geglättet)
-          let meanA = 0;
-          if (smoothHist.length > 1) {
-            let sum = 0;
-            for (let i = 1; i < smoothHist.length; i++) {
-              let dt = smoothHist[i].t - smoothHist[i-1].t;
-              sum += Math.abs(smoothHist[i].a) * dt;
-            }
-            meanA = sum / (smoothHist[smoothHist.length-1].t);
-          }
-          // Vergleichsbremsweg bei konstanter Verzögerung (geglättet)
-          let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
-          // Alternative Methode: normierte Verzögerungskurve (geglättet)
-          let normBremsweg = calcNormBremsweg(brakeData, startSpeed, brakeTime);
-          document.getElementById('result').innerHTML =
-            `<b>Messung beendet!</b><br>Benötigte Bremszeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
-            `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-            `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-            `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
-          document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-
-          // --- Schwellenwertpunkte für Plot bestimmen ---
-          // Plot zeigt: nur im Bremsintervall geglättet, außerhalb roh
-          let tPlotStart = 0;
-          let tPlotEnd = Math.max(...accHistory.map(d=>d.t));
-          // Glättung nur im Bremsintervall, mit 3 Messwerten Abstand zu den Schwellenwerten
-          function smoothForPlot(data, tStart, tEnd, offset=3) {
-            const n = data.length;
-            if (n < 2) return data;
-            // Finde Indexbereiche für Glättung
-            let idxStart = data.findIndex(d => d.t >= tStart);
-            let idxEnd = data.findIndex(d => d.t > tEnd);
-            if (idxEnd === -1) idxEnd = n;
-            let smoothed = [];
-            for (let i = 0; i < n; i++) {
-              if (i < idxStart + offset || i >= idxEnd - offset) {
-                smoothed.push({ t: data[i].t, a: data[i].a });
-              } else {
-                let sum = 0, count = 0;
-                for (let j = Math.max(0, i - Math.floor(5/2)); j <= Math.min(n - 1, i + Math.floor(5/2)); j++) {
-                  sum += data[j].a;
-                  count++;
-                }
-                smoothed.push({ t: data[i].t, a: sum / count });
-              }
-            }
-            return smoothed;
-          }
-          let plotData = smoothForPlot(accHistory, tStartThresh, tEndThresh, 3);
-          // --- Beide Plots erzeugen: geglättet und roh ---
-          let plotDiv = document.getElementById('result');
-          plotDiv.innerHTML = '';
-          // Plot 1: geglättet (wie bisher)
-          let pngSmooth = showAccPlot(plotData, true, {
-            tStart: tPlotStart,
-            tEnd: tPlotEnd,
-            tThreshStart: tStartThresh,
-// }
-          });
-          // Plot 2: Rohdaten
-          let pngRaw = showAccPlot(accHistory, true, {
-            tStart: tPlotStart,
-            tEnd: tPlotEnd,
-            tThreshStart: tStartThresh,
-            tThreshEnd: tEndThresh
-          });
-          // Beide Plots anzeigen
-          let labelStyle = 'font-family:Segoe UI,Arial,sans-serif;font-size:13px;margin-top:0.5em;margin-bottom:0.2em;display:block;';
-          plotDiv.innerHTML += `<span style='${labelStyle}'>Geglättete Kurve (nur im Bremsintervall):</span><img src='${pngSmooth}' style='width:320px;border:1px solid #ccc;'><br>`;
-          plotDiv.innerHTML += `<span style='${labelStyle}'>Rohdaten:</span><img src='${pngRaw}' style='width:320px;border:1px solid #ccc;'><br>`;
-          window._tThreshStartRel = undefined;
-          window._tThreshEndRel = undefined;
-          window._t0Abs = undefined;
-          window._tThreshAbs = undefined;
-          window._tThreshEndAbs = undefined;
-          plotPNGs.push(pngSmooth);
-          // Messwerte für Excel speichern (geglättet wie im Plot)
-          accHistories.push(plotData.map(d => ({t: d.t, a: d.a})));
-          // Ergebnis speichern und anzeigen
-          results.push({
-            time: time,
-            startSpeed: startSpeed.toFixed(2),
-            distance: distance.toFixed(2),
-            vergleichsweg: vergleichsweg.toFixed(2),
-            meanA: meanA.toFixed(2),
-            normBremsweg: normBremsweg.toFixed(2)
-          });
-          updateResultsList();
-          // App zurücksetzen für neue Messung
-          waitingForDecel = false;
-          measuring = false;
-          window._postStopTimeout = null;
-        }, 1000);
+    accHistory.push({t: t, a: a});
+    if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold) {
+      measuring = false;
+      stopTime = performance.now();
+      let time = ((stopTime - startTime) / 1000).toFixed(2);
+      // Mittelwert der Verzögerung berechnen
+      let meanA = 0;
+      if (accHistory.length > 1) {
+        let sum = 0;
+        for (let i = 1; i < accHistory.length; i++) {
+          let dt = accHistory[i].t - accHistory[i-1].t;
+          sum += Math.abs(accHistory[i].a) * dt;
+        }
+        meanA = sum / (accHistory[accHistory.length-1].t);
       }
+      // Vergleichsbremsweg bei konstanter Verzögerung
+      let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
+      // Alternative Methode: normierte Verzögerungskurve
+      let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
+      document.getElementById('result').innerHTML =
+        `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
+        `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+        `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+        `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
+      document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+      // Plot anzeigen und PNG für Historie erzeugen
+      let png = showAccPlot(accHistory, true);
+      plotPNGs.push(png);
+      // Messwerte für Excel speichern
+      accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
+      // Ergebnis speichern und anzeigen
+      results.push({
+        time: time,
+        startSpeed: startSpeed.toFixed(2),
+        distance: distance.toFixed(2),
+        vergleichsweg: vergleichsweg.toFixed(2),
+        meanA: meanA.toFixed(2),
+        normBremsweg: normBremsweg.toFixed(2)
+      });
+      updateResultsList();
+      // App zurücksetzen für neue Messung
+      waitingForDecel = false;
+      measuring = false;
     }
   }
-// ...existing code...
+});
 
 // Plot-Funktion für Verzögerung über Zeit
-// Plot-Funktion für Verzögerung über Zeit mit erweitertem Zeitbereich und Markierung der Schwellenwerte
-function showAccPlot(data, returnPNG=false, opts={}) {
-  // opts: { tStart, tEnd, tThreshStart, tThreshEnd }
+// Plot-Funktion für Verzögerung über Zeit mit Schwellenwert-Linien und Markern
+function showAccPlot(data, returnPNG=false) {
   let plotDiv = document.getElementById('result');
   let w = 320, h = 140, pad = 40;
   let canvas = document.createElement('canvas');
@@ -545,39 +434,44 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   canvas.height = h;
   canvas.style.marginTop = '1em';
   let ctx = canvas.getContext('2d');
-  // Zeitbereich bestimmen
-  let tStart = opts.tStart !== undefined ? opts.tStart : 0;
-  let tEnd = opts.tEnd !== undefined ? opts.tEnd : data[data.length-1].t;
-  // Wertebereich bestimmen
-  let amin = Math.min(...data.map(d=>d.a));
-  let amax = Math.max(...data.map(d=>d.a));
-  if (amin === amax) { amin -= 1; amax += 1; }
-  // y=0 (a=0) bestimmen
-  let y0 = h-pad - (h-2*pad) * ((0-amin)/(amax-amin));
-
-  // --- Achsen zeichnen ---
+  // Achsen
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  // x-Achse (a=0)
-  ctx.moveTo(pad, y0);
-  ctx.lineTo(w-pad, y0);
-  // y-Achse
+  ctx.moveTo(pad, h-pad);
+  ctx.lineTo(w-pad, h-pad);
   ctx.moveTo(pad, h-pad);
   ctx.lineTo(pad, pad);
   ctx.stroke();
-
-  // --- Achsenbeschriftungen ---
+  // Achsenbeschriftungen
   ctx.fillStyle = '#222';
-  ctx.font = '12px Segoe UI';
+  ctx.font = '11px Segoe UI';
   ctx.textAlign = 'center';
-  // X-Achse
   ctx.fillText('Zeit (s)', w/2, h-4);
-  // Y-Achse: ganz links oben an der Achse, horizontal
-  ctx.textAlign = 'left';
-  ctx.fillText('a (m/s²)', pad-32, pad-8);
-
-  // --- Wertebereichsbeschriftung ---
+  ctx.save();
+  ctx.translate(15, h/2);
+  ctx.rotate(-Math.PI/2);
+  ctx.textAlign = 'center';
+  ctx.font = '11px Segoe UI';
+  ctx.fillText('Verzögerung (m/s²)', 0, 0);
+  ctx.restore();
+  // Wertebereich
+  let tmax = data[data.length-1].t;
+  let amin = Math.min(...data.map(d=>d.a));
+  let amax = Math.max(...data.map(d=>d.a));
+  if (amin === amax) { amin -= 1; amax += 1; }
+  // Plot
+  ctx.strokeStyle = '#e84118';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i=0; i<data.length; i++) {
+    let x = pad + (w-2*pad) * (data[i].t/tmax);
+    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
+    if (i===0) ctx.moveTo(x,y);
+    else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // Y-Achse Werte
   ctx.fillStyle = '#444';
   ctx.font = '12px Segoe UI';
   ctx.textAlign = 'right';
@@ -586,79 +480,8 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   // X-Achse Werte
   ctx.textAlign = 'center';
   ctx.font = '12px Segoe UI';
-  ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
-  ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
-
-  // --- Plot der Kurve ---
-  const graphLineWidth = 2;
-  ctx.strokeStyle = '#e84118';
-  ctx.lineWidth = graphLineWidth;
-  ctx.beginPath();
-  let first = true;
-  for (let i=0; i<data.length; i++) {
-    if (data[i].t < tStart || data[i].t > tEnd) continue;
-    let x = pad + (w-2*pad) * ((data[i].t-tStart)/(tEnd-tStart));
-    let y = h-pad - (h-2*pad) * ((data[i].a-amin)/(amax-amin));
-    if (first) { ctx.moveTo(x,y); first = false; }
-    else ctx.lineTo(x,y);
-  }
-  ctx.stroke();
-
-  // --- Schwellenwert-Linien und Marker ---
-  // Start-Schwellenwert (grün)
-  if (opts.tThreshStart !== undefined) {
-    let x = pad + (w-2*pad) * ((opts.tThreshStart-tStart)/(tEnd-tStart));
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#44bd32';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, h-pad);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.textAlign = 'center';
-    ctx.font = '12px Segoe UI';
-    ctx.fillStyle = '#44bd32';
-    ctx.fillText(opts.tThreshStart.toFixed(2)+'s', x, h-pad+28);
-    // Marker-Kreis (grün, klein)
-    let idx = data.findIndex(d => d.t >= opts.tThreshStart);
-    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
-    ctx.beginPath();
-    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
-    ctx.fillStyle = '#44bd32';
-    ctx.fill();
-    ctx.strokeStyle = '#44bd32';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-  }
-  // End-Schwellenwert (rot)
-  if (opts.tThreshEnd !== undefined) {
-    let x = pad + (w-2*pad) * ((opts.tThreshEnd-tStart)/(tEnd-tStart));
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#e84118';
-    ctx.lineWidth = 1.2;
-    ctx.beginPath();
-    ctx.moveTo(x, y0);
-    ctx.lineTo(x, h-pad);
-    ctx.stroke();
-    ctx.setLineDash([]);
-    ctx.textAlign = 'center';
-    ctx.font = '12px Segoe UI';
-    ctx.fillStyle = '#e84118';
-    ctx.fillText(opts.tThreshEnd.toFixed(2)+'s', x, h-pad+28);
-    // Marker-Kreis (rot, klein)
-    let idx = data.findIndex(d => d.t >= opts.tThreshEnd);
-    let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
-    ctx.beginPath();
-    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
-    ctx.fillStyle = '#e84118';
-    ctx.fill();
-    ctx.strokeStyle = '#e84118';
-    ctx.lineWidth = 1.2;
-    ctx.stroke();
-  }
-  ctx.setLineDash([]);
-
+  ctx.fillText('0', pad, h-pad+15);
+  ctx.fillText(tmax.toFixed(2), w-pad, h-pad+15);
   if (!returnPNG) {
     plotDiv.appendChild(canvas);
     return;
@@ -799,12 +622,40 @@ window.addEventListener('devicemotion', function(event) {
         breakGravAccs = [];
         if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
       }
-} else {
+    } else {
       breakGravAccs = [];
     }
   }
 });
-
-</script>
+// Buttons für Schwellenwert-Änderung
+  document.getElementById('decelLeft').onclick = function() {
+    let input = document.getElementById('decelThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val - 0.1);
+    input.value = val.toFixed(1);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('decelRight').onclick = function() {
+    let input = document.getElementById('decelThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = val + 0.1;
+    input.value = val.toFixed(1);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('stopLeft').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = Math.max(0, val - 0.1);
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
+  document.getElementById('stopRight').onclick = function() {
+    let input = document.getElementById('stopThreshold');
+    let val = parseFloat(input.value) || 0;
+    val = val + 0.1;
+    input.value = val.toFixed(2);
+    input.dispatchEvent(new Event('input'));
+  };
+  </script>
 </body>
 </html>
