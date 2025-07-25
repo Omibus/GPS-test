@@ -316,141 +316,156 @@ document.getElementById('clearWinkelZ').onclick = function() {
       return {x: x3, y: y3, z: z3};
     }
 
-    window.addEventListener('devicemotion', function(event) {
-      let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
-      if (!acc) return;
-      let wx = parseFloat(document.getElementById('winkelX').value) || 0;
-      let wy = parseFloat(document.getElementById('winkelY').value) || 0;
-      let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
-      let vec = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wx, wy, wz);
-      let a = 0;
-      if (direction === 'betrag') {
-        a = Math.sqrt(
-          Math.pow(vec.x, 2) +
-          Math.pow(vec.y, 2) +
-          Math.pow(vec.z, 2)
-        );
-      } else {
-        a = vec[direction] || 0;
-      }
-      // --- Kontinuierlicher Puffer für Rohdaten (letzte 3s) ---
-      let tNow = performance.now();
-      accBuffer.push({t: tNow, a: a});
-      while (accBuffer.length > 0 && (tNow - accBuffer[0].t) > 3000) accBuffer.shift();
-      document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
-      // Echtzeit-Update der Verzögerung
-      if (waitingForDecel && Math.abs(a) >= decelThreshold) {
-        measuring = true;
-        waitingForDecel = false;
-        startTime = performance.now();
-        startSpeed = currentSpeed;
-        // --- accHistory mit 1s Vorlauf aus accBuffer füllen ---
-        let tThresh = startTime;
-        let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
-        let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
-        // Zeitachse: erster Wert im Vorlauf ist t=0, alle weiteren Werte darauf bezogen
-        accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a }));
-        // Ersten Messwert (Schwellenwertüberschreitung) anhängen, falls nicht schon enthalten
-        if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
-          accHistory.push({ t: (tThresh - t0)/1000, a: a });
-        }
-        // Merke den relativen Zeitpunkt des Schwellenwerts für späteren Plot
-        window._tThreshStartRel = (tThresh - t0)/1000;
-        document.getElementById('status').innerHTML = 'Messung läuft...';
-      }
-      if (measuring) {
-        let dt = event.interval ? event.interval / 1000 : 0.02;
-        startSpeed = startSpeed || currentSpeed;
-        startSpeed = Math.max(0, startSpeed);
-        startSpeed = isNaN(startSpeed) ? 0 : startSpeed;
-        startSpeed = Math.max(startSpeed, 0);
-        startSpeed = Math.min(startSpeed, 100);
-        startSpeed = parseFloat(startSpeed);
-        currentSpeed -= Math.abs(a) * dt;
-        if (currentSpeed < 0) currentSpeed = 0;
-        distance += currentSpeed * dt;
-        // Verzögerung und Zeit für Plot speichern
-        let t = (performance.now() - startTime) / 1000;
-        accHistory.push({t: t, a: a});
-        if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold) {
-          if (!window._postStopTimeout) {
-            // 1 Sekunde nach Stop noch weiter aufzeichnen
-            window._postStopTimeout = setTimeout(function() {
-              measuring = false;
-              stopTime = performance.now();
-              // Doppelte Zeitstempel am Ende entfernen (z.B. falls mehrfach accHistory.push mit gleichem t)
-              let seen = new Set();
-              accHistory = accHistory.filter(d => {
-                let key = d.t.toFixed(5); // 5 Nachkommastellen reichen
-                if (seen.has(key)) return false;
-                seen.add(key); return true;
-              });
-              let time = ((stopTime - startTime) / 1000).toFixed(2);
+window.addEventListener('devicemotion', function(event) {
+  let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
+  if (!acc) return;
+  let wx = parseFloat(document.getElementById('winkelX').value) || 0;
+  let wy = parseFloat(document.getElementById('winkelY').value) || 0;
+  let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
+  let vec = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wx, wy, wz);
+  let a = 0;
+  if (direction === 'betrag') {
+    a = Math.sqrt(
+      Math.pow(vec.x, 2) +
+      Math.pow(vec.y, 2) +
+      Math.pow(vec.z, 2)
+    );
+  } else {
+    a = vec[direction] || 0;
+  }
+  // --- Kontinuierlicher Puffer für Rohdaten (letzte 4s) ---
+  let tNow = performance.now();
+  accBuffer.push({t: tNow, a: a});
+  while (accBuffer.length > 0 && (tNow - accBuffer[0].t) > 4000) accBuffer.shift();
+  document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
 
-              // Glättung nur im mittleren Bereich anwenden
-              let smoothHist = smoothAccHistoryPartial(accHistory);
-              // Mittelwert der Verzögerung berechnen (geglättet)
-              let meanA = 0;
-              if (smoothHist.length > 1) {
-                let sum = 0;
-                for (let i = 1; i < smoothHist.length; i++) {
-                  let dt = smoothHist[i].t - smoothHist[i-1].t;
-                  sum += Math.abs(smoothHist[i].a) * dt;
-                }
-                meanA = sum / (smoothHist[smoothHist.length-1].t);
-              }
-              // Vergleichsbremsweg bei konstanter Verzögerung (geglättet)
-              let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
-              // Alternative Methode: normierte Verzögerungskurve (geglättet)
-              let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
-              document.getElementById('result').innerHTML =
-                `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
-                `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-                `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-                `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
-              document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-              // Plot anzeigen und PNG für Historie erzeugen (geglättet)
-              // Schwellenwertpunkte suchen
-              // Schwellenwert-Zeitpunkte korrekt auf die Zeitachse von accHistory mappen
-              let tStartThresh = window._tThreshStartRel || 0;
-              // tEndThresh: Zeitpunkt, an dem Stop-Schwellenwert erstmals unterschritten wurde (relativ zu t0)
-              let idxEnd = accHistory.length-1;
-              for (let i=accHistory.length-1; i>=0; i--) {
-                if (Math.abs(accHistory[i].a) <= stopThreshold) { idxEnd = i; break; }
-              }
-              let tEndThresh = accHistory[idxEnd]?.t || accHistory[accHistory.length-1]?.t || 0;
-              // Plotbereich um 1s vor und nach Messung
-              let tPlotStart = Math.max(0, tStartThresh - 1);
-              let tPlotEnd = tEndThresh + 1;
-              let png = showAccPlot(smoothHist, true, {
-                tStart: tPlotStart,
-                tEnd: tPlotEnd,
-                tThreshStart: tStartThresh,
-                tThreshEnd: tEndThresh
-              });
-              window._tThreshStartRel = undefined;
-              plotPNGs.push(png);
-              // Messwerte für Excel speichern (geglättet)
-              accHistories.push(smoothHist.map(d => ({t: d.t, a: d.a})));
-              // Ergebnis speichern und anzeigen
-              results.push({
-                time: time,
-                startSpeed: startSpeed.toFixed(2),
-                distance: distance.toFixed(2),
-                vergleichsweg: vergleichsweg.toFixed(2),
-                meanA: meanA.toFixed(2),
-                normBremsweg: normBremsweg.toFixed(2)
-              });
-              updateResultsList();
-              // App zurücksetzen für neue Messung
-              waitingForDecel = false;
-              measuring = false;
-              window._postStopTimeout = null;
-            }, 1000);
+  // --- Messung starten, wenn Schwellenwert überschritten ---
+  if (waitingForDecel && Math.abs(a) >= decelThreshold) {
+    measuring = true;
+    waitingForDecel = false;
+    startTime = performance.now();
+    startSpeed = currentSpeed;
+    // --- accHistory mit 1s Vorlauf aus accBuffer füllen ---
+    let tThresh = startTime;
+    let preBuffer = accBuffer.filter(d => (tThresh - d.t) <= 1100);
+    let t0 = preBuffer.length > 0 ? preBuffer[0].t : tThresh;
+    accHistory = preBuffer.map(d => ({ t: (d.t - t0)/1000, a: d.a, absTime: d.t }));
+    // Ersten Messwert (Schwellenwertüberschreitung) anhängen, falls nicht schon enthalten
+    if (accHistory.length === 0 || accHistory[accHistory.length-1].t < 0.999) {
+      accHistory.push({ t: (tThresh - t0)/1000, a: a, absTime: tThresh });
+    }
+    // Merke den relativen Zeitpunkt des Schwellenwerts für späteren Plot
+    window._tThreshStartRel = (tThresh - t0)/1000;
+    window._t0Abs = t0;
+    window._tThreshAbs = tThresh;
+    window._tThreshEndAbs = null;
+    document.getElementById('status').innerHTML = 'Messung läuft...';
+  }
+
+  // --- Während Messung: Werte kontinuierlich aufzeichnen ---
+  if (measuring) {
+    let dt = event.interval ? event.interval / 1000 : 0.02;
+    startSpeed = startSpeed || currentSpeed;
+    startSpeed = Math.max(0, startSpeed);
+    startSpeed = isNaN(startSpeed) ? 0 : startSpeed;
+    startSpeed = Math.max(startSpeed, 0);
+    startSpeed = Math.min(startSpeed, 100);
+    startSpeed = parseFloat(startSpeed);
+    currentSpeed -= Math.abs(a) * dt;
+    if (currentSpeed < 0) currentSpeed = 0;
+    distance += currentSpeed * dt;
+    // Verzögerung und Zeit für Plot speichern
+    let t = (performance.now() - startTime) / 1000;
+    let absTime = performance.now();
+    accHistory.push({t: t, a: a, absTime: absTime});
+
+    // --- Stop-Schwellenwert erreicht? ---
+    if (Math.abs(a) <= stopThreshold && currentSpeed <= stopThreshold && !window._tThreshEndAbs) {
+      window._tThreshEndAbs = absTime;
+      window._tThreshEndRel = (absTime - window._t0Abs)/1000;
+      // 1 Sekunde nach Stop noch weiter aufzeichnen
+      if (!window._postStopTimeout) {
+        window._postStopTimeout = setTimeout(function() {
+          measuring = false;
+          stopTime = performance.now();
+          // --- accHistory auf 1s nach Stop-Schwellenwert beschränken ---
+          let tEndAbs = window._tThreshEndAbs;
+          let t0 = window._t0Abs;
+          // Filter: nur Werte von t0 (1s vor Start) bis tEndAbs+1s behalten
+          accHistory = accHistory.filter(d => d.absTime >= t0 && d.absTime <= (tEndAbs + 1000));
+          // Zeitachse neu normieren: t=0 bei t0
+          accHistory = accHistory.map(d => ({ t: (d.absTime - t0)/1000, a: d.a }));
+          // Doppelte Zeitstempel entfernen
+          let seen = new Set();
+          accHistory = accHistory.filter(d => {
+            let key = d.t.toFixed(5);
+            if (seen.has(key)) return false;
+            seen.add(key); return true;
+          });
+          let time = ((stopTime - startTime) / 1000).toFixed(2);
+
+          // Glättung nur im mittleren Bereich anwenden
+          let smoothHist = smoothAccHistoryPartial(accHistory);
+          // Mittelwert der Verzögerung berechnen (geglättet)
+          let meanA = 0;
+          if (smoothHist.length > 1) {
+            let sum = 0;
+            for (let i = 1; i < smoothHist.length; i++) {
+              let dt = smoothHist[i].t - smoothHist[i-1].t;
+              sum += Math.abs(smoothHist[i].a) * dt;
+            }
+            meanA = sum / (smoothHist[smoothHist.length-1].t);
           }
-        }
+          // Vergleichsbremsweg bei konstanter Verzögerung (geglättet)
+          let vergleichsweg = meanA > 0 ? (Math.pow(startSpeed,2)/(2*meanA)) : 0;
+          // Alternative Methode: normierte Verzögerungskurve (geglättet)
+          let normBremsweg = calcNormBremsweg(accHistory, startSpeed, (stopTime-startTime)/1000);
+          document.getElementById('result').innerHTML =
+            `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Geschätzter Weg: ${distance.toFixed(2)} m<br>Startgeschwindigkeit: ${startSpeed.toFixed(2)} m/s` +
+            `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+            `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+            `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
+          document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+
+          // --- Schwellenwertpunkte für Plot bestimmen ---
+          let tStartThresh = window._tThreshStartRel || 0;
+          let tEndThresh = window._tThreshEndRel || (accHistory[accHistory.length-1]?.t || 0);
+          // Plotbereich: 1s vor Start bis 1s nach Ende
+          let tPlotStart = 0;
+          let tPlotEnd = Math.max(...accHistory.map(d=>d.t));
+          let png = showAccPlot(smoothHist, true, {
+            tStart: tPlotStart,
+            tEnd: tPlotEnd,
+            tThreshStart: tStartThresh,
+            tThreshEnd: tEndThresh
+          });
+          window._tThreshStartRel = undefined;
+          window._tThreshEndRel = undefined;
+          window._t0Abs = undefined;
+          window._tThreshAbs = undefined;
+          window._tThreshEndAbs = undefined;
+          plotPNGs.push(png);
+          // Messwerte für Excel speichern (geglättet)
+          accHistories.push(smoothHist.map(d => ({t: d.t, a: d.a})));
+          // Ergebnis speichern und anzeigen
+          results.push({
+            time: time,
+            startSpeed: startSpeed.toFixed(2),
+            distance: distance.toFixed(2),
+            vergleichsweg: vergleichsweg.toFixed(2),
+            meanA: meanA.toFixed(2),
+            normBremsweg: normBremsweg.toFixed(2)
+          });
+          updateResultsList();
+          // App zurücksetzen für neue Messung
+          waitingForDecel = false;
+          measuring = false;
+          window._postStopTimeout = null;
+        }, 1000);
       }
-    });
+    }
+  }
+});
 
 // Plot-Funktion für Verzögerung über Zeit
 // Plot-Funktion für Verzögerung über Zeit mit erweitertem Zeitbereich und Markierung der Schwellenwerte
