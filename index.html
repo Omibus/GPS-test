@@ -216,7 +216,7 @@ document.getElementById('clearWinkelZ').onclick = function() {
     html += `<br><span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span>`;
     html += `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${r.normBremsweg} m</span>`;
     if (plotPNGs[i]) {
-      html += `<br><img src='${plotPNGs[i]}' style='width:320px;border:1px solid #ccc;margin-top:0.5em;'>`;
+      html += `<br><img src='${plotPNGs[i]}' style='width:340px;border:1px solid #ccc;margin-top:0.5em;'>`;
     }
     html += `</div>`;
   });
@@ -431,8 +431,9 @@ window.addEventListener('devicemotion', function(event) {
           `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
         document.getElementById('status').innerHTML = 'Stillstand erkannt.';
         // Plot anzeigen und PNG für Historie erzeugen (wird später für 2 Plots erweitert)
-        let png = showAccPlot(accHistory, true);
+        let png = showAccPlots(accHistory, decelThreshold, stopThreshold, true);
         plotPNGs.push(png);
+        showAccPlots(accHistory, decelThreshold, stopThreshold, false);
         // Messwerte für Excel speichern
         accHistories.push(accHistory.map(d => ({t: d.t, a: d.a})));
         // Ergebnis speichern und anzeigen
