@@ -431,6 +431,9 @@ window.addEventListener('devicemotion', function(event) {
           `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${normBremsweg.toFixed(2)} m</span>`;
         document.getElementById('status').innerHTML = 'Stillstand erkannt.';
         // Plot anzeigen und PNG für Historie erzeugen (wird später für 2 Plots erweitert)
+        // Ergebnis-Div leeren, dann Plots anzeigen
+        let plotDiv = document.getElementById('result');
+        plotDiv.innerHTML = '';
         let png = showAccPlots(accHistory, decelThreshold, stopThreshold, true);
         plotPNGs.push(png);
         showAccPlots(accHistory, decelThreshold, stopThreshold, false);
