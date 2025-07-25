@@ -379,14 +379,16 @@ document.getElementById('clearWinkelZ').onclick = function() {
             let tCross = null;
             // Fall 1: Betrag unterschreitet Schwellenwert (von >= auf <)
             if (tCross === null && prevAbsA >= stopThreshold && currAbsA < stopThreshold) {
-              let a1 = prevAbsA;
-              let a2 = currAbsA;
-              let frac = (a1 - stopThreshold) / (a1 - a2);
+              // Interpolation mit Originalwerten, nicht mit Betrag!
+              let a1 = prevA;
+              let a2 = currA;
+              let absA1 = prevAbsA;
+              let absA2 = currAbsA;
+              let frac = (absA1 - stopThreshold) / (absA1 - absA2);
               tCross = t1 + frac * (t2 - t1);
             }
             // Fall 2: Vorzeichenwechsel (a1 * a2 < 0)
             if (tCross === null && prevA !== 0 && Math.sign(prevA) !== Math.sign(currA)) {
-              // Nur wenn nicht bereits durch Betrag ausgelöst
               let a1 = prevA;
               let a2 = currA;
               let frac = -a1 / (a2 - a1);
@@ -972,6 +974,4 @@ window.addEventListener('devicemotion', function(event) {
   </script>
 </body>
 </html>
-  </script>
-</body>
 </html>
