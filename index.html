@@ -508,28 +508,102 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
   ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
-  // --- Plot der Kurve mit Hervorhebung des Auswerteintervalls ---
-  // Wir zeichnen eine durchgehende Linie durch alle Punkte (inkl. interpolierte)
-  // und färben die Linie je nach Bereich unterschiedlich ein.
+  // --- Plot der Kurve abschnittsweise (grau/rot/grau) ---
   const graphLineWidth = 2;
   ctx.lineWidth = graphLineWidth;
+  let tEvalStart = opts.tThreshStart;
+  let tEvalEnd = opts.tThreshEnd;
 
-  // Hilfsfunktion: Bereichsfarbe bestimmen
-  function getColor(t) {
-    if (opts.tThreshStart !== undefined && t < opts.tThreshStart) return '#bbb';
-    if (opts.tThreshEnd !== undefined && t > opts.tThreshEnd) return '#bbb';
-    return '#e84118';
-  }
-
-  // Linie durch alle Punkte, Farbe je nach Bereich
-  for (let i = 1; i < data.length; i++) {
-    let t0 = data[i-1].t, t1 = data[i].t;
-    let a0 = data[i-1].a, a1 = data[i].a;
+  // Zeichne abschnittsweise
+  let lastColor = null;
+  ctx.beginPath();
+  for (let i = 0; i < data.length-1; i++) {
+    let t0 = data[i].t, t1 = data[i+1].t;
+    let a0 = data[i].a, a1 = data[i+1].a;
     let x0 = pad + (w-2*pad) * ((t0-tStart)/(tEnd-tStart));
     let y0p = h-pad - (h-2*pad) * ((a0-amin)/(amax-amin));
     let x1 = pad + (w-2*pad) * ((t1-tStart)/(tEnd-tStart));
     let y1p = h-pad - (h-2*pad) * ((a1-amin)/(amax-amin));
-    ctx.strokeStyle = getColor((t0 + t1) / 2);
+
+    // Abschnittsfarbe bestimmen
+    let segStart = t0, segEnd = t1;
+    let segColor = '#bbb';
+    if (tEvalStart !== undefined && tEvalEnd !== undefined) {
+      if (segEnd <= tEvalStart || segStart >= tEvalEnd) {
+        segColor = '#bbb';
+      } else if (segStart >= tEvalStart && segEnd <= tEvalEnd) {
+        segColor = '#e84118';
+      } else {
+        // Segment schneidet einen Schwellenwert: splitten und beide Teile zeichnen
+        if (segStart < tEvalStart && segEnd > tEvalStart && segEnd <= tEvalEnd) {
+          // Split bei tEvalStart
+          let frac = (tEvalStart - segStart) / (segEnd - segStart);
+          let xSplit = x0 + frac * (x1 - x0);
+          let ySplit = y0p + frac * (y1p - y0p);
+          // Grau bis tEvalStart
+          ctx.strokeStyle = '#bbb';
+          ctx.beginPath();
+          ctx.moveTo(x0, y0p);
+          ctx.lineTo(xSplit, ySplit);
+          ctx.stroke();
+          // Rot ab tEvalStart
+          ctx.strokeStyle = '#e84118';
+          ctx.beginPath();
+          ctx.moveTo(xSplit, ySplit);
+          ctx.lineTo(x1, y1p);
+          ctx.stroke();
+          continue;
+        } else if (segStart >= tEvalStart && segStart < tEvalEnd && segEnd > tEvalEnd) {
+          // Split bei tEvalEnd
+          let frac = (tEvalEnd - segStart) / (segEnd - segStart);
+          let xSplit = x0 + frac * (x1 - x0);
+          let ySplit = y0p + frac * (y1p - y0p);
+          // Rot bis tEvalEnd
+          ctx.strokeStyle = '#e84118';
+          ctx.beginPath();
+          ctx.moveTo(x0, y0p);
+          ctx.lineTo(xSplit, ySplit);
+          ctx.stroke();
+          // Grau ab tEvalEnd
+          ctx.strokeStyle = '#bbb';
+          ctx.beginPath();
+          ctx.moveTo(xSplit, ySplit);
+          ctx.lineTo(x1, y1p);
+          ctx.stroke();
+          continue;
+        } else if (segStart < tEvalStart && segEnd > tEvalEnd) {
+          // Split bei beiden Schwellenwerten
+          let frac1 = (tEvalStart - segStart) / (segEnd - segStart);
+          let xSplit1 = x0 + frac1 * (x1 - x0);
+          let ySplit1 = y0p + frac1 * (y1p - y0p);
+          let frac2 = (tEvalEnd - segStart) / (segEnd - segStart);
+          let xSplit2 = x0 + frac2 * (x1 - x0);
+          let ySplit2 = y0p + frac2 * (y1p - y0p);
+          // Grau bis tEvalStart
+          ctx.strokeStyle = '#bbb';
+          ctx.beginPath();
+          ctx.moveTo(x0, y0p);
+          ctx.lineTo(xSplit1, ySplit1);
+          ctx.stroke();
+          // Rot zwischen tEvalStart und tEvalEnd
+          ctx.strokeStyle = '#e84118';
+          ctx.beginPath();
+          ctx.moveTo(xSplit1, ySplit1);
+          ctx.lineTo(xSplit2, ySplit2);
+          ctx.stroke();
+          // Grau ab tEvalEnd
+          ctx.strokeStyle = '#bbb';
+          ctx.beginPath();
+          ctx.moveTo(xSplit2, ySplit2);
+          ctx.lineTo(x1, y1p);
+          ctx.stroke();
+          continue;
+        }
+      }
+    } else if (tEvalStart !== undefined && segStart >= tEvalStart) {
+      segColor = '#e84118';
+    }
+    ctx.strokeStyle = segColor;
     ctx.beginPath();
     ctx.moveTo(x0, y0p);
     ctx.lineTo(x1, y1p);
@@ -538,8 +612,8 @@ function showAccPlot(data, returnPNG=false, opts={}) {
 
   // --- Schwellenwert-Marker exakt auf interpolierten Punkten ---
   // Marker für Start
-  if (opts.tThreshStart !== undefined) {
-    let idx = data.findIndex(d => d.t === opts.tThreshStart && d._interpolated);
+  if (tEvalStart !== undefined) {
+    let idx = data.findIndex(d => d.t === tEvalStart && d._interpolated);
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
@@ -554,8 +628,8 @@ function showAccPlot(data, returnPNG=false, opts={}) {
     }
   }
   // Marker für Ende
-  if (opts.tThreshEnd !== undefined) {
-    let idx = data.findIndex(d => d.t === opts.tThreshEnd && d._interpolated);
+  if (tEvalEnd !== undefined) {
+    let idx = data.findIndex(d => d.t === tEvalEnd && d._interpolated);
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
@@ -730,51 +804,6 @@ window.addEventListener('devicemotion', function(event) {
     input.value = val.toFixed(1);
     input.dispatchEvent(new Event('input'));
   };
-  document.getElementById('stopLeft').onclick = function() {
-    let input = document.getElementById('stopThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = Math.max(0, val - 0.1);
-    input.value = val.toFixed(2);
-    input.dispatchEvent(new Event('input'));
-  };
-  document.getElementById('stopRight').onclick = function() {
-    let input = document.getElementById('stopThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = val + 0.1;
-    input.value = val.toFixed(2);
-    input.dispatchEvent(new Event('input'));
-  };
-  </script>
-  <script>
-    // --- Bildschirm-anhalten/Wake Lock ---
-    let wakeLock = null;
-    async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
-          wakeLock.addEventListener('release', () => {
-            document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
-          });
-        } catch (err) {
-          document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
-        }
-      } else {
-        document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
-      }
-    }
-    // Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') requestWakeLock();
-      else if (wakeLock) { wakeLock.release(); wakeLock = null; }
-    });
-    window.addEventListener('touchstart', requestWakeLock, { once: true });
-    window.addEventListener('mousedown', requestWakeLock, { once: true });
-    // Optional: direkt beim Laden versuchen
-    requestWakeLock();
-  </script>
-</body>
-</html>
   document.getElementById('stopLeft').onclick = function() {
     let input = document.getElementById('stopThreshold');
     let val = parseFloat(input.value) || 0;
