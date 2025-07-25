@@ -502,13 +502,13 @@ function showAccPlot(data, returnPNG=false, opts={}) {
 
   // --- Achsenbeschriftungen ---
   ctx.fillStyle = '#222';
-  ctx.font = '11px Segoe UI';
+  ctx.font = '12px Segoe UI';
   ctx.textAlign = 'center';
   // X-Achse
   ctx.fillText('Zeit (s)', w/2, h-4);
-  // Y-Achse oben, horizontal
-  ctx.font = 'bold 13px Segoe UI';
-  ctx.fillText('a (m/s²)', pad + (w-2*pad)/2, pad-18);
+  // Y-Achse: ganz links oben an der Achse, horizontal
+  ctx.textAlign = 'left';
+  ctx.fillText('a (m/s²)', pad-32, pad-8);
 
   // --- Wertebereichsbeschriftung ---
   ctx.fillStyle = '#444';
@@ -523,8 +523,9 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
 
   // --- Plot der Kurve ---
+  const graphLineWidth = 2;
   ctx.strokeStyle = '#e84118';
-  ctx.lineWidth = 2;
+  ctx.lineWidth = graphLineWidth;
   ctx.beginPath();
   let first = true;
   for (let i=0; i<data.length; i++) {
@@ -537,64 +538,57 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   ctx.stroke();
 
   // --- Schwellenwert-Linien und Marker ---
-  ctx.setLineDash([6, 6]);
-  ctx.strokeStyle = '#0097e6';
-  ctx.lineWidth = 1.2;
-  ctx.font = '11px Segoe UI';
-  ctx.fillStyle = '#0097e6';
+  // Start-Schwellenwert (grün)
   if (opts.tThreshStart !== undefined) {
     let x = pad + (w-2*pad) * ((opts.tThreshStart-tStart)/(tEnd-tStart));
-    // Vertikale gestrichelte Linie
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#44bd32';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(x, y0);
     ctx.lineTo(x, h-pad);
     ctx.stroke();
-    // Zeitwert angeben
     ctx.setLineDash([]);
     ctx.textAlign = 'center';
-    ctx.font = '11px Segoe UI';
+    ctx.font = '12px Segoe UI';
+    ctx.fillStyle = '#44bd32';
     ctx.fillText(opts.tThreshStart.toFixed(2)+'s', x, h-pad+28);
-    ctx.setLineDash([6, 6]);
-    // Marker-Kreis
+    // Marker-Kreis (grün, klein)
     let idx = data.findIndex(d => d.t >= opts.tThreshStart);
     let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, 2*Math.PI);
+    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
     ctx.fillStyle = '#44bd32';
     ctx.fill();
-    ctx.strokeStyle = '#222';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#0097e6';
+    ctx.strokeStyle = '#44bd32';
     ctx.lineWidth = 1.2;
+    ctx.stroke();
   }
+  // End-Schwellenwert (rot)
   if (opts.tThreshEnd !== undefined) {
     let x = pad + (w-2*pad) * ((opts.tThreshEnd-tStart)/(tEnd-tStart));
-    // Vertikale gestrichelte Linie
+    ctx.setLineDash([6, 6]);
+    ctx.strokeStyle = '#e84118';
+    ctx.lineWidth = 1.2;
     ctx.beginPath();
     ctx.moveTo(x, y0);
     ctx.lineTo(x, h-pad);
     ctx.stroke();
-    // Zeitwert angeben
     ctx.setLineDash([]);
     ctx.textAlign = 'center';
-    ctx.font = '11px Segoe UI';
+    ctx.font = '12px Segoe UI';
+    ctx.fillStyle = '#e84118';
     ctx.fillText(opts.tThreshEnd.toFixed(2)+'s', x, h-pad+28);
-    ctx.setLineDash([6, 6]);
-    // Marker-Kreis
+    // Marker-Kreis (rot, klein)
     let idx = data.findIndex(d => d.t >= opts.tThreshEnd);
     let y = h-pad - (h-2*pad) * ((data[idx]?.a-amin)/(amax-amin));
     ctx.beginPath();
-    ctx.arc(x, y, 6, 0, 2*Math.PI);
+    ctx.arc(x, y, graphLineWidth*1.5, 0, 2*Math.PI);
     ctx.fillStyle = '#e84118';
     ctx.fill();
-    ctx.strokeStyle = '#222';
-    ctx.lineWidth = 2;
-    ctx.stroke();
-    ctx.setLineDash([6, 6]);
-    ctx.strokeStyle = '#0097e6';
+    ctx.strokeStyle = '#e84118';
     ctx.lineWidth = 1.2;
+    ctx.stroke();
   }
   ctx.setLineDash([]);
 
