@@ -32,6 +32,7 @@
     .status { margin-top: 1rem; color: #888; font-size: 0.9rem; }
     .speed { font-size: 1.2rem; margin-top: 1rem; text-align: center; }
   </style>
+</head>
 <body>
   <div class="container">
     <h1>Bremsweg-Messung</h1>
@@ -111,6 +112,9 @@ let accBuffer = []; // Kontinuierlicher Puffer für Rohdaten (letzte 3s)
         wakeLock = await navigator.wakeLock.request('screen');
         wakeLock.addEventListener('release', () => {
           console.log('Wake Lock wurde freigegeben');
+        });
+      } catch (err) {
+        console.error('Wake Lock Fehler:', err);
       }
     }
     function releaseWakeLock() {
@@ -829,6 +833,6 @@ window.addEventListener('devicemotion', function(event) {
     input.value = val.toFixed(2);
     input.dispatchEvent(new Event('input'));
   };
-  }
+</script>
 </body>
 </html>
