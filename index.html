@@ -475,12 +475,18 @@ function processMeasurement() {
     }
     return res;
   }
-  let brakeDataSmooth = brakeDataRaw.map((d, i, arr) => ({
-    t: d.t,
-    a: smoothCurve(arr, 2)[i],
-    _trigger1: d._trigger1,
-    _trigger2: d._trigger2
-  }));
+  // Glättung nur zwischen Triggerpunkten, davor und danach Originalwerte
+  let brakeDataSmooth = plotData.map((d, i) => {
+    if (i < idx_beg || i > idx_end) {
+      // Vor erstem oder nach letztem Triggerpunkt: Originalwert
+      return { t: d.t, a: d.a, _trigger1: d._trigger1, _trigger2: d._trigger2 };
+    } else {
+      // Im Bremsbereich: geglättet
+      let arr = plotData.slice(idx_beg, idx_end+1);
+      let smoothA = smoothCurve(arr, 2)[i-idx_beg];
+      return { t: d.t, a: smoothA, _trigger1: d._trigger1, _trigger2: d._trigger2 };
+    }
+  });
 
   // --- Bremsweg-Berechnung ---
   function integrateBrake(data, startSpeed) {
