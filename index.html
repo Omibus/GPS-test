@@ -241,69 +241,47 @@ window.addEventListener('devicemotion', function(event) {
     }
     let relTime = (now - startTime) / 1000;
     accData.push({t: now, relT: relTime, a: aM});
-
-    // Trigger 1: Betrag überschreitet decelThreshold
-    if (!trigger1 && Math.abs(aM) >= decelThreshold) {
-      let prev = accData.length > 1 ? accData[accData.length-2] : null;
-      if (prev && Math.abs(prev.a) < decelThreshold) {
-        let t1 = prev.relT, t2 = relTime;
-        let a1 = prev.a, a2 = aM;
-        let absA1 = Math.abs(a1), absA2 = Math.abs(a2);
-        let frac = (decelThreshold - absA1) / (absA2 - absA1);
-        let tCross = t1 + frac * (t2 - t1);
-        let aCross = a1 + frac * (a2 - a1);
-        trigger1 = {t: tCross, a: aCross, idx: accData.length-1};
-      } else {
-        trigger1 = {t: relTime, a: aM, idx: accData.length-1};
-      }
-      // Status nur hier ändern
-      document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
-    }
-
-    // Trigger 2: Betrag unterschreitet stopThreshold ODER Vorzeichenwechsel
-    if (trigger1 && !trigger2) {
-      let prev = accData.length > 1 ? accData[accData.length-2] : null;
-      if (Math.abs(aM) < stopThreshold) {
-        if (prev && Math.abs(prev.a) >= stopThreshold) {
-          let t1 = prev.relT, t2 = relTime;
-          let a1 = prev.a, a2 = aM;
-          let absA1 = Math.abs(a1), absA2 = Math.abs(a2);
-          let frac = (absA1 - stopThreshold) / (absA1 - absA2);
-          let tCross = t1 + frac * (t2 - t1);
-          let aCross = a1 + frac * (a2 - a1);
-          trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
-        } else {
-          trigger2 = {t: relTime, a: aM, idx: accData.length-1};
-        }
-      }
-      else if (prev && Math.sign(prev.a) !== Math.sign(aM)) {
-        let t1 = prev.relT, t2 = relTime;
-        let a1 = prev.a, a2 = aM;
-        let frac = -a1 / (a2 - a1);
-        let tCross = t1 + frac * (t2 - t1);
-        let aCross = 0;
-        trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
-      }
-      if (trigger2) {
-        document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
-        if (!postStopTimeout) {
-          postStopTimeout = setTimeout(() => {
-            measuring = false;
-            stopTime = performance.now();
-            processMeasurement();
-          }, 1000);
-        }
-      }
-    }
-    // Status NICHT im normalen Messbetrieb ändern
+    // Keine Triggerlogik mehr hier! Nur Rohdaten sammeln.
   }
 });
 
 // --- Messdatenauswertung und Bremsweg-Berechnung ---
 function processMeasurement() {
+  // --- Triggerpunkte im Datenarray suchen (erst jetzt, nicht während Messung!) ---
+  // 1. Trigger: erster Messwert, der Betrag >= decelThreshold
+  let idx1 = -1, t1 = null, a1 = null;
+  for (let i = 0; i < accData.length; i++) {
+    if (Math.abs(accData[i].a) >= decelThreshold) {
+      t1 = accData[i].relT;
+      a1 = accData[i].a;
+      idx1 = i;
+      break;
+    }
+  }
+  // 2. Trigger: erster Messwert nach idx1, der Betrag < stopThreshold oder Vorzeichenwechsel
+  let idx2 = -1, t2 = null, a2 = null;
+  for (let i = idx1 > 0 ? idx1 : 1; i < accData.length; i++) {
+    let prev = accData[i-1], curr = accData[i];
+    if (Math.abs(curr.a) < stopThreshold) {
+      t2 = curr.relT;
+      a2 = curr.a;
+      idx2 = i;
+      break;
+    }
+    if (Math.sign(prev.a) !== Math.sign(curr.a)) {
+      t2 = prev.relT;
+      a2 = prev.a;
+      idx2 = i-1;
+      break;
+    }
+  }
+  if (t1 === null || t2 === null) {
+    document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.';
+    return;
+  }
   // Zeitbereich: 1s vor Trigger1 bis 1s nach Trigger2 (relativ zu Messbeginn)
-  let tStart = Math.max(0, trigger1.t - 1.0);
-  let tEnd = trigger2.t + 1.0;
+  let tStart = Math.max(0, t1 - 1.0);
+  let tEnd = t2 + 1.0;
   // Schneide Messdaten auf diesen Bereich zu
   let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
   // Füge exakte Triggerpunkte ein, falls nötig
@@ -342,8 +320,8 @@ function processMeasurement() {
   }
   let t0 = data[0].relT;
   // Triggerpunkte im normierten Zeitbereich bestimmen
-  let t_beg = trigger1.t - tStart;
-  let t_end = trigger2.t - tStart;
+  let t_beg = t1 - tStart;
+  let t_end = t2 - tStart;
   // plotData mit Trigger-Marker
   let plotData = data.map(d => {
     let tNorm = d.relT - t0;
