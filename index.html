@@ -806,6 +806,33 @@ document.getElementById('decelRight').onclick = function() {
   input.dispatchEvent(new Event('input'));
 };
 
+// Buttons für Schwellenwert Stillstand (stopThreshold)
+document.getElementById('stopLeft').onclick = function() {
+  let input = document.getElementById('stopThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = Math.max(0, val - 0.01);
+  input.value = val.toFixed(2);
+  input.dispatchEvent(new Event('input'));
+};
+document.getElementById('stopRight').onclick = function() {
+  let input = document.getElementById('stopThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = Math.max(0, val + 0.01);
+  input.value = val.toFixed(2);
+  input.dispatchEvent(new Event('input'));
+};
+
+// Clear-Buttons für Winkel-Eingabefelder
+document.getElementById('clearWinkelX').onclick = function() {
+  document.getElementById('winkelX').value = 0;
+};
+document.getElementById('clearWinkelY').onclick = function() {
+  document.getElementById('winkelY').value = 0;
+};
+document.getElementById('clearWinkelZ').onclick = function() {
+  document.getElementById('winkelZ').value = 0;
+};
+
 // --- Bildschirm-anhalten/Wake Lock ---
 let wakeLock = null;
 async function requestWakeLock() {
