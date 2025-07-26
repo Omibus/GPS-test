@@ -315,7 +315,7 @@ function processMeasurement() {
   let tEnd = t2 + 1.0;
   // Schneide Messdaten auf diesen Bereich zu
   let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
-  // Füge exakte Triggerpunkte ein, falls nötig
+  // Füge exakte Triggerpunkte ein, falls nötig, und markiere sie für den Plot
   if (data.length === 0 || Math.abs(data[0].relT - tStart) > 1e-6) {
     // Interpolieren
     let before = null, after = null;
@@ -327,8 +327,11 @@ function processMeasurement() {
     if (before && after) {
       let frac = (tStart - before.relT) / (after.relT - before.relT);
       let aInterp = before.a + frac * (after.a - before.a);
-      data.unshift({ relT: tStart, a: aInterp, _interpolated: true });
+      data.unshift({ relT: tStart, a: aInterp, _interpolated: true, _trigger1: true });
     }
+  } else {
+    // Falls der erste Punkt exakt tStart ist, markiere ihn als Trigger1
+    if (Math.abs(data[0].relT - tStart) < 1e-6) data[0]._trigger1 = true;
   }
   if (data.length === 0 || Math.abs(data[data.length-1].relT - tEnd) > 1e-6) {
     let before = null, after = null;
@@ -340,8 +343,11 @@ function processMeasurement() {
     if (before && after) {
       let frac = (tEnd - before.relT) / (after.relT - before.relT);
       let aInterp = before.a + frac * (after.a - before.a);
-      data.push({ relT: tEnd, a: aInterp, _interpolated: true });
+      data.push({ relT: tEnd, a: aInterp, _interpolated: true, _trigger2: true });
     }
+  } else {
+    // Falls der letzte Punkt exakt tEnd ist, markiere ihn als Trigger2
+    if (Math.abs(data[data.length-1].relT - tEnd) < 1e-6) data[data.length-1]._trigger2 = true;
   }
 
   // Zeitachse für Plot und Integration: relT auf 0 normieren
@@ -353,12 +359,15 @@ function processMeasurement() {
   // Triggerpunkte im normierten Zeitbereich bestimmen
   let t_beg = t1 - tStart;
   let t_end = t2 - tStart;
-  // plotData mit Trigger-Marker
-  let plotData = data.map(d => {
+  // plotData: Marker nur an echten Messwerten (idx1, idx2)
+  let plotData = data.map((d, i) => {
     let tNorm = d.relT - t0;
     let obj = { t: tNorm, a: d.a };
-    if (Math.abs(tNorm - t_beg) < 1e-4) obj._trigger1 = true;
-    if (Math.abs(tNorm - t_end) < 1e-4) obj._trigger2 = true;
+    // Marker nur an echten Messwerten (idx1, idx2 im accData-Array)
+    // Finde Index im accData-Array für diesen Datenpunkt
+    let accIdx = accData.findIndex(ad => ad.relT === d.relT && ad.a === d.a);
+    if (accIdx === idx1) obj._trigger1 = true;
+    if (accIdx === idx2) obj._trigger2 = true;
     return obj;
   });
   // Index im Datenarray für Start und Ende
@@ -402,6 +411,13 @@ function processMeasurement() {
       if (dt < 0) dt = 0; // Sicherheit
       let aVal = Math.abs(data[i].a);
       v[i] = v[i-1] - aVal * dt;
+      if (v[i] < 0) {
+        // Interpolieren, wann v=0 erreicht wurde
+        let frac = v[i-1] / (v[i-1] - v[i]);
+        let tZero = data[i-1].t + frac * (data[i].t - data[i-1].t);
+        s += (v[i-1] + 0) / 2 * (tZero - data[i-1].t);
+        return { s, v };
+      }
       s += (v[i-1] + v[i]) / 2 * dt;
     }
     return { s, v };
