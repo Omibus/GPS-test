@@ -341,14 +341,20 @@ function processMeasurement() {
     return;
   }
   let t0 = data[0].relT;
-  let plotData = data.map(d => ({ t: d.relT - t0, a: d.a }));
-
-  // --- Bestimme das relevante Bremsintervall (zwischen Trigger1 und Trigger2) ---
+  // Triggerpunkte im normierten Zeitbereich bestimmen
   let t_beg = trigger1.t - tStart;
   let t_end = trigger2.t - tStart;
+  // plotData mit Trigger-Marker
+  let plotData = data.map(d => {
+    let tNorm = d.relT - t0;
+    let obj = { t: tNorm, a: d.a };
+    if (Math.abs(tNorm - t_beg) < 1e-4) obj._trigger1 = true;
+    if (Math.abs(tNorm - t_end) < 1e-4) obj._trigger2 = true;
+    return obj;
+  });
   // Index im Datenarray für Start und Ende
-  let idx_beg = plotData.findIndex(d => Math.abs(d.t - t_beg) < 1e-6);
-  let idx_end = plotData.findIndex(d => Math.abs(d.t - t_end) < 1e-6);
+  let idx_beg = plotData.findIndex(d => d._trigger1);
+  let idx_end = plotData.findIndex(d => d._trigger2);
   if (idx_beg < 0) idx_beg = 0;
   if (idx_end < 0) idx_end = plotData.length-1;
 
@@ -506,8 +512,12 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
   // --- Plot der Kurve abschnittsweise (grau/rot/grau) ---
   const graphLineWidth = 2;
   ctx.lineWidth = graphLineWidth;
-  let tEvalStart = opts.tThreshStart;
-  let tEvalEnd = opts.tThreshEnd;
+  // Triggerpunkte aus Datenarray extrahieren
+  let tEvalStart = undefined, tEvalEnd = undefined;
+  let idx1 = data.findIndex(d => d._trigger1);
+  let idx2 = data.findIndex(d => d._trigger2);
+  if (idx1 >= 0) tEvalStart = data[idx1].t;
+  if (idx2 >= 0) tEvalEnd = data[idx2].t;
 
   // Zeichne abschnittsweise
   let lastColor = null;
@@ -608,17 +618,7 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
   // --- Schwellenwert-Marker und Zeitmarken ---
   // Marker für Start (grün)
   if (tEvalStart !== undefined) {
-    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalStart
-    let idx = data.findIndex(d => d.t === tEvalStart && d._interpolated);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalStart);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    let idx = data.findIndex(d => d._trigger1);
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
@@ -649,17 +649,7 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
   }
   // Marker für Ende (blau)
   if (tEvalEnd !== undefined) {
-    // Suche interpolierten Punkt ODER, falls nicht vorhanden, den Punkt mit t am nächsten zu tEvalEnd
-    let idx = data.findIndex(d => d.t === tEvalEnd && d._interpolated);
-    if (idx < 0) {
-      // Fallback: nächsten Punkt suchen
-      let minDist = Infinity, minIdx = -1;
-      for (let i = 0; i < data.length; i++) {
-        let dist = Math.abs(data[i].t - tEvalEnd);
-        if (dist < minDist) { minDist = dist; minIdx = i; }
-      }
-      idx = minIdx;
-    }
+    let idx = data.findIndex(d => d._trigger2);
     if (idx >= 0) {
       let d = data[idx];
       let x = pad + (w-2*pad) * ((d.t-tStart)/(tEnd-tStart));
