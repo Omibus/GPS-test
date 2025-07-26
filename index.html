@@ -1,3 +1,4 @@
+*** ENDE PATCH: DEBUG-Block entfernt ***
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -87,8 +88,88 @@
     <div class="result" id="result"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
+    <button id="debugSinusBtn" style="background:#e1b12c;margin-top:1em;">DEBUG: Sinus-Testdiagramm</button>
   </div>
   <script>
+// --- DEBUG: Testfunktion für synthetische Sinus-Messung ---
+function debugTestSinusMessung() {
+  let v0 = 1.0; // m/s
+  let peakA = 5.0; // m/s²
+  let period = 1.0; // s
+  let dt = 0.02; // 50 Hz
+  let tMax = 2.0; // 2s
+  let decelThreshold = 2.0;
+  let stopThreshold = 0.3;
+  let accData = [];
+  for (let t = 0; t <= tMax; t += dt) {
+    let a = peakA * Math.sin(2 * Math.PI * t / period);
+    accData.push({ t: t*1000, relT: t, a: a });
+  }
+  let idx1 = -1, t1 = null, a1 = null;
+  for (let i = 0; i < accData.length; i++) {
+    if (Math.abs(accData[i].a) >= decelThreshold) {
+      t1 = accData[i].relT;
+      a1 = accData[i].a;
+      idx1 = i;
+      break;
+    }
+  }
+  let idx2 = -1, t2 = null, a2 = null;
+  for (let i = idx1 > 0 ? idx1 : 1; i < accData.length; i++) {
+    let prev = accData[i-1], curr = accData[i];
+    if (Math.abs(curr.a) < stopThreshold) {
+      t2 = curr.relT;
+      a2 = curr.a;
+      idx2 = i;
+      break;
+    }
+    if (Math.sign(prev.a) !== Math.sign(curr.a)) {
+      t2 = prev.relT;
+      a2 = prev.a;
+      idx2 = i-1;
+      break;
+    }
+  }
+  let tStart = Math.max(0, t1 - 1.0);
+  let tEnd = t2 + 1.0;
+  let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
+  let trigger1Point = accData[idx1];
+  let trigger2Point = accData[idx2];
+  if (!data.some(d => d === trigger1Point)) {
+    if (trigger1Point.relT < tStart) {
+      data.unshift(trigger1Point);
+    } else {
+      let insertIdx = data.findIndex(d => d.relT > trigger1Point.relT);
+      if (insertIdx === -1) data.push(trigger1Point);
+      else data.splice(insertIdx, 0, trigger1Point);
+    }
+  }
+  if (!data.some(d => d === trigger2Point)) {
+    if (trigger2Point.relT > tEnd) {
+      data.push(trigger2Point);
+    } else {
+      let insertIdx = data.findIndex(d => d.relT > trigger2Point.relT);
+      if (insertIdx === -1) data.push(trigger2Point);
+      else data.splice(insertIdx, 0, trigger2Point);
+    }
+  }
+  data.forEach(d => { delete d._trigger1; delete d._trigger2; });
+  trigger1Point._trigger1 = true;
+  trigger2Point._trigger2 = true;
+  let t0 = data[0].relT;
+  let plotData = data.map(d => {
+    let tNorm = d.relT - t0;
+    let obj = { t: tNorm, a: d.a };
+    if (d._trigger1) obj._trigger1 = true;
+    if (d._trigger2) obj._trigger2 = true;
+    return obj;
+  });
+  showAccPlot(plotData, false, {
+    tThreshStart: t1 - tStart,
+    tThreshEnd: t2 - tStart
+  });
+}
+document.getElementById('debugSinusBtn').onclick = debugTestSinusMessung;
 let accBuffer = [];
 let accData = [];
 let trigger1Reached = false;
