@@ -108,6 +108,12 @@ let plotPNGs = [];
 let postStopActive = false;
 let postStopStart = null;
 const ACC_BUFFER_SEC = 1.0; // 1s Vorlauf
+// rotateVector Dummy, falls nicht definiert
+if (typeof rotateVector !== 'function') {
+  function rotateVector(x, y, z, wx, wy, wz) {
+    return { x: x, y: y, z: z };
+  }
+}
 // useGravity beim Laden auf den Zustand des Kontrollkästchens setzen
 useGravity = document.getElementById('gravityToggle').checked;
 // Event-Listener für das Kontrollkästchen
@@ -120,15 +126,16 @@ document.getElementById('startBtn').onclick = function() {
   direction = document.getElementById('direction').value;
   measuring = true;
   measuringUseGravity = useGravity; // Für diese Messung merken
-  accData = accBuffer.map(d => ({...d})); // Vorlauf übernehmen
+  let now = performance.now();
+  startTime = now;
+  // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
+  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a }));
   trigger1 = null;
   trigger2 = null;
   postStopTimeout = null;
-  startTime = performance.now();
   stopTime = null;
   document.getElementById('result').innerHTML = '';
   document.getElementById('status').innerHTML = 'Messdatenerfassung läuft...';
-  // Die Anzeige bleibt erhalten
 };
 
 document.getElementById('stopBtn').onclick = function() {
