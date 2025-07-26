@@ -89,7 +89,6 @@
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
   </div>
   <script>
-let measuring = false;
 let accBuffer = [];
 let accData = [];
 let trigger1 = null;
@@ -100,7 +99,9 @@ let stopTime = null;
 let decelThreshold = 2;
 let stopThreshold = 0.3;
 let direction = 'y';
-let useGravity = false;
+let useGravity = false; // UI-Status
+let measuring = false;
+let measuringUseGravity = false; // Für die laufende Messung
 let results = [];
 let accHistories = [];
 let plotPNGs = [];
@@ -118,8 +119,8 @@ document.getElementById('startBtn').onclick = function() {
   stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
   direction = document.getElementById('direction').value;
   measuring = true;
-  accBuffer = [];
-  accData = [];
+  measuringUseGravity = useGravity; // Für diese Messung merken
+  accData = accBuffer.map(d => ({...d})); // Vorlauf übernehmen
   trigger1 = null;
   trigger2 = null;
   postStopTimeout = null;
@@ -127,7 +128,7 @@ document.getElementById('startBtn').onclick = function() {
   stopTime = null;
   document.getElementById('result').innerHTML = '';
   document.getElementById('status').innerHTML = 'Messdatenerfassung läuft...';
-  document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+  // Die Anzeige bleibt erhalten
 };
 
 document.getElementById('stopBtn').onclick = function() {
@@ -170,80 +171,97 @@ function updateResultsList() {
 
 // --- Messdatenerfassung ---
 window.addEventListener('devicemotion', function(event) {
-  if (!measuring) return;
-  let acc = useGravity ? event.accelerationIncludingGravity : event.acceleration;
-  if (!acc) return;
+  // --- Immer aktuellen Beschleunigungswert berechnen und anzeigen ---
+  let accRaw = useGravity ? event.accelerationIncludingGravity : event.acceleration;
+  if (!accRaw) return;
   let wx = parseFloat(document.getElementById('winkelX').value) || 0;
   let wy = parseFloat(document.getElementById('winkelY').value) || 0;
   let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
-  let vec = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wx, wy, wz);
+  let vec = rotateVector(accRaw.x || 0, accRaw.y || 0, accRaw.z || 0, wx, wy, wz);
   let a = 0;
-  if (direction === 'betrag') {
+  let dir = direction;
+  if (dir === 'betrag') {
     a = Math.sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
   } else {
-    a = vec[direction] || 0;
+    a = vec[dir] || 0;
   }
   let now = performance.now();
-  let relTime = (now - startTime) / 1000;
-  accBuffer.push({t: now, relT: relTime, a: a});
   // Buffer auf 1s begrenzen
+  accBuffer.push({t: now, relT: 0, a: a});
   while (accBuffer.length > 0 && (now - accBuffer[0].t) > 1100) accBuffer.shift();
-  accData.push({t: now, relT: relTime, a: a});
+  // relT im Buffer aktualisieren (relativ zu jetzt)
+  accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
+  // Anzeige immer aktualisieren
   document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
 
-  // Trigger 1: Betrag überschreitet decelThreshold
-  if (!trigger1 && Math.abs(a) >= decelThreshold) {
-    // Suche exakten Schnittpunkt per Interpolation
-    let prev = accData.length > 1 ? accData[accData.length-2] : null;
-    if (prev && Math.abs(prev.a) < decelThreshold) {
-      let t1 = prev.relT, t2 = relTime;
-      let a1 = prev.a, a2 = a;
-      let absA1 = Math.abs(a1), absA2 = Math.abs(a2);
-      let frac = (decelThreshold - absA1) / (absA2 - absA1);
-      let tCross = t1 + frac * (t2 - t1);
-      let aCross = a1 + frac * (a2 - a1);
-      trigger1 = {t: tCross, a: aCross, idx: accData.length-1};
+  // --- Messung läuft? Dann Messdaten erfassen ---
+  if (measuring) {
+    // Für die Messung: immer den bei Messbeginn gesetzten Modus verwenden
+    let acc = measuringUseGravity ? event.accelerationIncludingGravity : event.acceleration;
+    if (!acc) return;
+    let wxM = parseFloat(document.getElementById('winkelX').value) || 0;
+    let wyM = parseFloat(document.getElementById('winkelY').value) || 0;
+    let wzM = parseFloat(document.getElementById('winkelZ').value) || 0;
+    let vecM = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wxM, wyM, wzM);
+    let aM = 0;
+    if (direction === 'betrag') {
+      aM = Math.sqrt(vecM.x*vecM.x + vecM.y*vecM.y + vecM.z*vecM.z);
     } else {
-      trigger1 = {t: relTime, a: a, idx: accData.length-1};
+      aM = vecM[direction] || 0;
     }
-    document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
-  }
+    let relTime = (now - startTime) / 1000;
+    accData.push({t: now, relT: relTime, a: aM});
 
-  // Trigger 2: Betrag unterschreitet stopThreshold ODER Vorzeichenwechsel
-  if (trigger1 && !trigger2) {
-    let prev = accData.length > 1 ? accData[accData.length-2] : null;
-    // Betrag unterschreitet Schwellenwert
-    if (Math.abs(a) < stopThreshold) {
-      if (prev && Math.abs(prev.a) >= stopThreshold) {
+    // Trigger 1: Betrag überschreitet decelThreshold
+    if (!trigger1 && Math.abs(aM) >= decelThreshold) {
+      let prev = accData.length > 1 ? accData[accData.length-2] : null;
+      if (prev && Math.abs(prev.a) < decelThreshold) {
         let t1 = prev.relT, t2 = relTime;
-        let a1 = prev.a, a2 = a;
+        let a1 = prev.a, a2 = aM;
         let absA1 = Math.abs(a1), absA2 = Math.abs(a2);
-        let frac = (absA1 - stopThreshold) / (absA1 - absA2);
+        let frac = (decelThreshold - absA1) / (absA2 - absA1);
         let tCross = t1 + frac * (t2 - t1);
         let aCross = a1 + frac * (a2 - a1);
-        trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
+        trigger1 = {t: tCross, a: aCross, idx: accData.length-1};
       } else {
-        trigger2 = {t: relTime, a: a, idx: accData.length-1};
+        trigger1 = {t: relTime, a: aM, idx: accData.length-1};
       }
+      document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
     }
-    // Vorzeichenwechsel
-    else if (prev && Math.sign(prev.a) !== Math.sign(a)) {
-      let t1 = prev.relT, t2 = relTime;
-      let a1 = prev.a, a2 = a;
-      let frac = -a1 / (a2 - a1);
-      let tCross = t1 + frac * (t2 - t1);
-      let aCross = 0;
-      trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
-    }
-    if (trigger2) {
-      document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
-      // Nachlauf 1s, dann Messung beenden
-      if (!postStopTimeout) {
-        postStopTimeout = setTimeout(() => {
-          measuring = false;
-          stopTime = performance.now();
-          processMeasurement();
-        }, 1000);
+
+    // Trigger 2: Betrag unterschreitet stopThreshold ODER Vorzeichenwechsel
+    if (trigger1 && !trigger2) {
+      let prev = accData.length > 1 ? accData[accData.length-2] : null;
+      if (Math.abs(aM) < stopThreshold) {
+        if (prev && Math.abs(prev.a) >= stopThreshold) {
+          let t1 = prev.relT, t2 = relTime;
+          let a1 = prev.a, a2 = aM;
+          let absA1 = Math.abs(a1), absA2 = Math.abs(a2);
+          let frac = (absA1 - stopThreshold) / (absA1 - absA2);
+          let tCross = t1 + frac * (t2 - t1);
+          let aCross = a1 + frac * (a2 - a1);
+          trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
+        } else {
+          trigger2 = {t: relTime, a: aM, idx: accData.length-1};
+        }
+      }
+      else if (prev && Math.sign(prev.a) !== Math.sign(aM)) {
+        let t1 = prev.relT, t2 = relTime;
+        let a1 = prev.a, a2 = aM;
+        let frac = -a1 / (a2 - a1);
+        let tCross = t1 + frac * (t2 - t1);
+        let aCross = 0;
+        trigger2 = {t: tCross, a: aCross, idx: accData.length-1};
+      }
+      if (trigger2) {
+        document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
+        if (!postStopTimeout) {
+          postStopTimeout = setTimeout(() => {
+            measuring = false;
+            stopTime = performance.now();
+            processMeasurement();
+          }, 1000);
+        }
       }
     }
   }
