@@ -91,8 +91,8 @@
   <script>
 let accBuffer = [];
 let accData = [];
-let trigger1 = null;
-let trigger2 = null;
+let trigger1Reached = false;
+let trigger2Reached = false;
 let postStopTimeout = null;
 let startTime = null;
 let stopTime = null;
@@ -130,8 +130,8 @@ document.getElementById('startBtn').onclick = function() {
   startTime = now;
   // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
   accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a }));
-  trigger1 = null;
-  trigger2 = null;
+  trigger1Reached = false;
+  trigger2Reached = false;
   postStopTimeout = null;
   stopTime = null;
   document.getElementById('result').innerHTML = '';
@@ -144,8 +144,8 @@ document.getElementById('stopBtn').onclick = function() {
   stopTime = null;
   accBuffer = [];
   accData = [];
-  trigger1 = null;
-  trigger2 = null;
+  trigger1Reached = false;
+  trigger2Reached = false;
   document.getElementById('result').innerHTML = '';
   document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.';
   document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
@@ -226,7 +226,6 @@ window.addEventListener('devicemotion', function(event) {
 
   // --- Messung läuft? Dann Messdaten erfassen ---
   if (measuring) {
-    // Für die Messung: immer den bei Messbeginn gesetzten Modus verwenden
     let acc = measuringUseGravity ? event.accelerationIncludingGravity : event.acceleration;
     if (!acc) return;
     let wxM = parseFloat(document.getElementById('winkelX').value) || 0;
@@ -241,7 +240,39 @@ window.addEventListener('devicemotion', function(event) {
     }
     let relTime = (now - startTime) / 1000;
     accData.push({t: now, relT: relTime, a: aM});
-    // Keine Triggerlogik mehr hier! Nur Rohdaten sammeln.
+
+    // Trigger 1 prüfen (erstes Überschreiten decelThreshold)
+    if (!trigger1Reached && Math.abs(aM) >= decelThreshold) {
+      trigger1Reached = true;
+      document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
+    }
+
+    // Trigger 2 prüfen (erstes Unterschreiten stopThreshold oder Vorzeichenwechsel nach Trigger 1)
+    if (trigger1Reached && !trigger2Reached && accData.length > 1) {
+      let prev = accData[accData.length-2];
+      let curr = accData[accData.length-1];
+      if (Math.abs(curr.a) < stopThreshold) {
+        trigger2Reached = true;
+        document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
+        if (!postStopTimeout) {
+          postStopTimeout = setTimeout(() => {
+            measuring = false;
+            stopTime = performance.now();
+            processMeasurement();
+          }, 1000);
+        }
+      } else if (Math.sign(prev.a) !== Math.sign(curr.a)) {
+        trigger2Reached = true;
+        document.getElementById('status').innerHTML = 'Trigger 2 erreicht (Vorzeichenwechsel), Nachlauf...';
+        if (!postStopTimeout) {
+          postStopTimeout = setTimeout(() => {
+            measuring = false;
+            stopTime = performance.now();
+            processMeasurement();
+          }, 1000);
+        }
+      }
+    }
   }
 });
 
