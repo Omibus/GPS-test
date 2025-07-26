@@ -168,12 +168,35 @@ function updateResultsList() {
     html += `<b>Nr. ${i+1}</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Mittlere Verzögerung: ${r.meanA} m/s², Bremsweg: ${r.distance}m`;
     html += `<br><span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span>`;
     html += `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${r.normBremsweg} m</span>`;
-    if (plotPNGs[i]) {
-      html += `<br><img src='${plotPNGs[i]}' style='width:320px;border:1px solid #ccc;margin-top:0.5em;'>`;
-    }
+    html += `<br><span class='plotimg' id='plotimg${i}'></span>`;
     html += `</div>`;
   });
   listDiv.innerHTML = html;
+  // Nach dem Einfügen: für jede Messung das Plot-Bild dynamisch erzeugen
+  results.forEach((r, i) => {
+    if (accHistories[i]) {
+      // Erzeuge ein temporäres Canvas und hänge es an die richtige Stelle
+      let plotDiv = document.createElement('div');
+      plotDiv.style.textAlign = 'center';
+      // accHistories[i] enthält relT und a, aber showAccPlot erwartet t und a
+      // Wir setzen t = relT für die Anzeige
+      let plotData = accHistories[i].map(d => ({ t: d.t, a: d.a }));
+      // Trigger-Bereiche aus den letzten PNG-Optionen rekonstruieren (optional)
+      // Wir können sie nicht exakt rekonstruieren, daher lassen wir sie weg oder setzen sie auf den Bereich der Daten
+      let opts = {};
+      if (plotData.length > 1) {
+        opts.tThreshStart = plotData[0].t;
+        opts.tThreshEnd = plotData[plotData.length-1].t;
+      }
+      // showAccPlot erzeugt ein Canvas, das wir anhängen
+      let canvas = document.createElement('canvas');
+      canvas.width = 320;
+      canvas.height = 140;
+      showAccPlot(plotData, false, opts, canvas);
+      let imgDiv = document.getElementById('plotimg'+i);
+      if (imgDiv) imgDiv.appendChild(canvas);
+    }
+  });
 }
 
 // --- Messdatenerfassung ---
@@ -233,6 +256,7 @@ window.addEventListener('devicemotion', function(event) {
       } else {
         trigger1 = {t: relTime, a: aM, idx: accData.length-1};
       }
+      // Status nur hier ändern
       document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
     }
 
@@ -271,6 +295,7 @@ window.addEventListener('devicemotion', function(event) {
         }
       }
     }
+    // Status NICHT im normalen Messbetrieb ändern
   }
 });
 
@@ -417,11 +442,11 @@ function processMeasurement() {
 }
 
 // --- Plot-Funktion für Verzögerung über Zeit
-function showAccPlot(data, returnPNG=false, opts={}) {
+function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
   // opts: { tThreshStart, tThreshEnd }
   let plotDiv = document.getElementById('result');
   let w = 320, h = 140, pad = 40;
-  let canvas = document.createElement('canvas');
+  let canvas = canvasOverride || document.createElement('canvas');
   canvas.width = w;
   canvas.height = h;
   canvas.style.marginTop = '1em';
@@ -657,7 +682,7 @@ function showAccPlot(data, returnPNG=false, opts={}) {
   }
 
   if (!returnPNG) {
-    plotDiv.appendChild(canvas);
+    if (!canvasOverride) plotDiv.appendChild(canvas);
     return;
   } else {
     return canvas.toDataURL('image/png');
