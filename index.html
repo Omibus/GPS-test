@@ -771,85 +771,85 @@ window.addEventListener('devicemotion', function(event) {
     }
   }
 });
-// Buttons für Schwellenwert-Änderung
-  document.getElementById('decelLeft').onclick = function() {
-    let input = document.getElementById('decelThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = Math.max(0, val - 0.1);
-    input.value = val.toFixed(1);
-    input.dispatchEvent(new Event('input'));
-  };
-  document.getElementById('decelRight').onclick = function() {
-    let input = document.getElementById('decelThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = val + 0.1;
-    input.value = val.toFixed(1);
-    input.dispatchEvent(new Event('input'));
-  };
-  document.getElementById('stopLeft').onclick = function() {
-    let input = document.getElementById('stopThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = Math.max(0, val - 0.1);
-    input.value = val.toFixed(2);
-    input.dispatchEvent(new Event('input'));
-  };
-  document.getElementById('stopRight').onclick = function() {
-    let input = document.getElementById('stopThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = val + 0.1;
-    input.value = val.toFixed(2);
-    input.dispatchEvent(new Event('input'));
-  };
-  </script>
-  <script>
-    // --- Bildschirm-anhalten/Wake Lock ---
-    let wakeLock = null;
-    async function requestWakeLock() {
-      if ('wakeLock' in navigator) {
-        try {
-          wakeLock = await navigator.wakeLock.request('screen');
-          document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
-          wakeLock.addEventListener('release', () => {
-            document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
-          });
-        } catch (err) {
-          document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
-        }
-      } else {
-        document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
-      }
+// --- GPS Geschwindigkeit und Position ---
+if ('geolocation' in navigator) {
+  navigator.geolocation.watchPosition(function(pos) {
+    if (pos.coords.speed != null) {
+      let currentSpeed = Math.max(0, pos.coords.speed);
+      document.getElementById('speed').innerHTML = `Geschwindigkeit: ${currentSpeed.toFixed(2)} m/s`;
     }
-    // Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
-    document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') requestWakeLock();
-      else if (wakeLock) { wakeLock.release(); wakeLock = null; }
-    });
-    window.addEventListener('touchstart', requestWakeLock, { once: true });
-    window.addEventListener('mousedown', requestWakeLock, { once: true });
-    // Optional: direkt beim Laden versuchen
-    requestWakeLock();
+    if (pos.coords.latitude != null && pos.coords.longitude != null) {
+      document.getElementById('gps').innerHTML = `GPS: ${pos.coords.latitude.toFixed(6)} / ${pos.coords.longitude.toFixed(6)}`;
+    }
+  }, function(err) {
+    document.getElementById('speed').innerHTML = 'GPS nicht verfügbar';
+    document.getElementById('gps').innerHTML = 'GPS: - / -';
+  }, { enableHighAccuracy: true, maximumAge: 1000 });
+} else {
+  document.getElementById('speed').innerHTML = 'GPS nicht verfügbar';
+  document.getElementById('gps').innerHTML = 'GPS: - / -';
+}
+
+// Buttons für Schwellenwert-Änderung
+document.getElementById('decelLeft').onclick = function() {
+  let input = document.getElementById('decelThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = Math.max(0, val - 0.1);
+  input.value = val.toFixed(1);
+  input.dispatchEvent(new Event('input'));
+};
+document.getElementById('decelRight').onclick = function() {
+  let input = document.getElementById('decelThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = val + 0.1;
+  input.value = val.toFixed(1);
+  input.dispatchEvent(new Event('input'));
+};
+document.getElementById('stopLeft').onclick = function() {
+  let input = document.getElementById('stopThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = Math.max(0, val - 0.1);
+  input.value = val.toFixed(2);
+  input.dispatchEvent(new Event('input'));
+};
+document.getElementById('stopRight').onclick = function() {
+  let input = document.getElementById('stopThreshold');
+  let val = parseFloat(input.value) || 0;
+  val = val + 0.1;
+  input.value = val.toFixed(2);
+  input.dispatchEvent(new Event('input'));
+};
+
+// --- Bildschirm-anhalten/Wake Lock ---
+let wakeLock = null;
+async function requestWakeLock() {
+  if ('wakeLock' in navigator) {
+    try {
+      wakeLock = await navigator.wakeLock.request('screen');
+      document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
+      wakeLock.addEventListener('release', () => {
+        document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
+      });
+    } catch (err) {
+      document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
+    }
+  } else {
+    document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
+  }
+}
+// Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') requestWakeLock();
+  else if (wakeLock) { wakeLock.release(); wakeLock = null; }
+});
+window.addEventListener('touchstart', requestWakeLock, { once: true });
+window.addEventListener('mousedown', requestWakeLock, { once: true });
+// Optional: direkt beim Laden versuchen
+requestWakeLock();
   </script>
 </body>
 </html>
-        breakGravAccs = [];
-        if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
-      }
-    } else {
-      breakGravAccs = [];
-    }
-  }
-});
-// Buttons für Schwellenwert-Änderung
-  document.getElementById('decelLeft').onclick = function() {
-    let input = document.getElementById('decelThreshold');
-    let val = parseFloat(input.value) || 0;
-    val = Math.max(0, val - 0.1);
-    input.value = val.toFixed(1);
-    input.dispatchEvent(new Event('input'));
-  };
-  document.getElementById('decelRight').onclick = function() {
-    let input = document.getElementById('decelThreshold');
-    let val = parseFloat(input.value) || 0;
+</html>
     val = val + 0.1;
     input.value = val.toFixed(1);
     input.dispatchEvent(new Event('input'));
