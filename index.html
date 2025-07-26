@@ -107,7 +107,12 @@ let plotPNGs = [];
 let postStopActive = false;
 let postStopStart = null;
 const ACC_BUFFER_SEC = 1.0; // 1s Vorlauf
-
+// useGravity beim Laden auf den Zustand des Kontrollkästchens setzen
+useGravity = document.getElementById('gravityToggle').checked;
+// Event-Listener für das Kontrollkästchen
+document.getElementById('gravityToggle').addEventListener('change', function() {
+  useGravity = this.checked;
+});
 document.getElementById('startBtn').onclick = function() {
   decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
   stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
