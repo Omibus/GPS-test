@@ -253,29 +253,35 @@ function updateResultsList() {
     html += `</div>`;
   });
   listDiv.innerHTML = html;
-  // Nach dem Einfügen: für jede Messung das Plot-Bild dynamisch erzeugen
+  // Nach dem Einfügen: für jede Messung beide Plots erzeugen
   results.forEach((r, i) => {
     if (accHistories[i]) {
-      // Erzeuge ein temporäres Canvas und hänge es an die richtige Stelle
-      let plotDiv = document.createElement('div');
-      plotDiv.style.textAlign = 'center';
-      // accHistories[i] enthält relT und a, aber showAccPlot erwartet t und a
-      // Wir setzen t = relT für die Anzeige
-      let plotData = accHistories[i].map(d => ({ t: d.t, a: d.a }));
-      // Trigger-Bereiche aus den letzten PNG-Optionen rekonstruieren (optional)
-      // Wir können sie nicht exakt rekonstruieren, daher lassen wir sie weg oder setzen sie auf den Bereich der Daten
-      let opts = {};
-      if (plotData.length > 1) {
-        opts.tThreshStart = plotData[0].t;
-        opts.tThreshEnd = plotData[plotData.length-1].t;
-      }
-      // showAccPlot erzeugt ein Canvas, das wir anhängen
-      let canvas = document.createElement('canvas');
-      canvas.width = 320;
-      canvas.height = 140;
-      showAccPlot(plotData, false, opts, canvas);
       let imgDiv = document.getElementById('plotimg'+i);
-      if (imgDiv) imgDiv.appendChild(canvas);
+      if (!imgDiv) return;
+      // Ungeglättet
+      let canvasRaw = document.createElement('canvas');
+      canvasRaw.width = 320;
+      canvasRaw.height = 140;
+      showAccPlot(accHistories[i].raw, false, {
+        tThreshStart: accHistories[i].raw.find(d=>d._trigger1)?.t ?? accHistories[i].raw[0].t,
+        tThreshEnd: accHistories[i].raw.find(d=>d._trigger2)?.t ?? accHistories[i].raw[accHistories[i].raw.length-1].t
+      }, canvasRaw);
+      let labelRaw = document.createElement('div');
+      labelRaw.innerHTML = '<b>Ungeglättet</b>';
+      imgDiv.appendChild(labelRaw);
+      imgDiv.appendChild(canvasRaw);
+      // Geglättet
+      let canvasSmooth = document.createElement('canvas');
+      canvasSmooth.width = 320;
+      canvasSmooth.height = 140;
+      showAccPlot(accHistories[i].smooth, false, {
+        tThreshStart: accHistories[i].smooth.find(d=>d._trigger1)?.t ?? accHistories[i].smooth[0].t,
+        tThreshEnd: accHistories[i].smooth.find(d=>d._trigger2)?.t ?? accHistories[i].smooth[accHistories[i].smooth.length-1].t
+      }, canvasSmooth);
+      let labelSmooth = document.createElement('div');
+      labelSmooth.innerHTML = '<b>Geglättet</b>';
+      imgDiv.appendChild(labelSmooth);
+      imgDiv.appendChild(canvasSmooth);
     }
   });
 }
@@ -471,7 +477,9 @@ function processMeasurement() {
   }
   let brakeDataSmooth = brakeDataRaw.map((d, i, arr) => ({
     t: d.t,
-    a: smoothCurve(arr, 2)[i]
+    a: smoothCurve(arr, 2)[i],
+    _trigger1: d._trigger1,
+    _trigger2: d._trigger2
   }));
 
   // --- Bremsweg-Berechnung ---
@@ -530,17 +538,33 @@ function processMeasurement() {
     `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
     `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
     `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
-    `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>`;
+    `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
+    `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
+  // Ungeglätteter Plot
+  let canvasRaw = document.createElement('canvas');
+  canvasRaw.width = 320;
+  canvasRaw.height = 140;
+  showAccPlot(plotData, false, {
+    tThreshStart: t_beg,
+    tThreshEnd: t_end
+  }, canvasRaw);
+  document.getElementById('result').appendChild(canvasRaw);
+  document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
+  // Geglätteter Plot
+  let canvasSmooth = document.createElement('canvas');
+  canvasSmooth.width = 320;
+  canvasSmooth.height = 140;
+  showAccPlot(brakeDataSmooth, false, {
+    tThreshStart: brakeDataSmooth.find(d=>d._trigger1)?.t ?? brakeDataSmooth[0].t,
+    tThreshEnd: brakeDataSmooth.find(d=>d._trigger2)?.t ?? brakeDataSmooth[brakeDataSmooth.length-1].t
+  }, canvasSmooth);
+  document.getElementById('result').appendChild(canvasSmooth);
 
   document.getElementById('status').innerHTML = 'Stillstand erkannt.';
 
-  // Plot anzeigen (ungeglättet und geglättet)
-  let png = showAccPlot(plotData, true, {
-    tThreshStart: t_beg,
-    tThreshEnd: t_end
-  });
-  plotPNGs.push(png);
-  accHistories.push(plotData.map(d => ({t: d.t, a: d.a})));
+  // Für Historie beide Kurven speichern
+  plotPNGs.push(canvasRaw.toDataURL('image/png'));
+  accHistories.push({raw: plotData.map(d => ({t: d.t, a: d.a, _trigger1: d._trigger1, _trigger2: d._trigger2})), smooth: brakeDataSmooth});
   results.push({
     time: time,
     startSpeed: v0.toFixed(2),
