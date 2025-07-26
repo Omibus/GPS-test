@@ -301,7 +301,7 @@ window.addEventListener('devicemotion', function(event) {
 
 // --- Messdatenauswertung und Bremsweg-Berechnung ---
 function processMeasurement() {
-  // Zeitbereich: 1s vor Trigger1 bis 1s nach Trigger2
+  // Zeitbereich: 1s vor Trigger1 bis 1s nach Trigger2 (relativ zu Messbeginn)
   let tStart = Math.max(0, trigger1.t - 1.0);
   let tEnd = trigger2.t + 1.0;
   // Schneide Messdaten auf diesen Bereich zu
@@ -335,17 +335,25 @@ function processMeasurement() {
     }
   }
 
+  // Zeitachse für Plot und Integration: relT auf 0 normieren
+  if (data.length === 0) {
+    document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.';
+    return;
+  }
+  let t0 = data[0].relT;
+  let plotData = data.map(d => ({ t: d.relT - t0, a: d.a }));
+
   // --- Bestimme das relevante Bremsintervall (zwischen Trigger1 und Trigger2) ---
-  let t_beg = trigger1.t, t_end = trigger2.t;
-  let a_beg = trigger1.a, a_end = trigger2.a;
+  let t_beg = trigger1.t - tStart;
+  let t_end = trigger2.t - tStart;
   // Index im Datenarray für Start und Ende
-  let idx_beg = data.findIndex(d => Math.abs(d.relT - t_beg) < 1e-6);
-  let idx_end = data.findIndex(d => Math.abs(d.relT - t_end) < 1e-6);
+  let idx_beg = plotData.findIndex(d => Math.abs(d.t - t_beg) < 1e-6);
+  let idx_end = plotData.findIndex(d => Math.abs(d.t - t_end) < 1e-6);
   if (idx_beg < 0) idx_beg = 0;
-  if (idx_end < 0) idx_end = data.length-1;
+  if (idx_end < 0) idx_end = plotData.length-1;
 
   // --- Ungeglättete Beschleunigungskurve für das Intervall ---
-  let brakeDataRaw = data.slice(idx_beg, idx_end+1);
+  let brakeDataRaw = plotData.slice(idx_beg, idx_end+1);
 
   // --- Glättung (moving average, aber Endpunkte bleiben erhalten) ---
   function smoothCurve(arr, windowSize) {
@@ -366,7 +374,7 @@ function processMeasurement() {
     return res;
   }
   let brakeDataSmooth = brakeDataRaw.map((d, i, arr) => ({
-    t: d.relT,
+    t: d.t,
     a: smoothCurve(arr, 2)[i]
   }));
 
@@ -376,7 +384,7 @@ function processMeasurement() {
     let s = 0;
     for (let i = 1; i < data.length; i++) {
       let dt = data[i].t - data[i-1].t;
-      // Immer Bremsrichtung (Vorzeichen egal)
+      if (dt < 0) dt = 0; // Sicherheit
       let aVal = Math.abs(data[i].a);
       v[i] = v[i-1] - aVal * dt;
       s += (v[i-1] + v[i]) / 2 * dt;
@@ -387,8 +395,9 @@ function processMeasurement() {
   // Startgeschwindigkeit: Integration rückwärts bis t_beg
   let v0 = 0;
   for (let i = idx_beg-1; i >= 0; i--) {
-    let dt = data[i+1].relT - data[i].relT;
-    v0 += Math.abs(data[i].a) * dt;
+    let dt = plotData[i+1].t - plotData[i].t;
+    if (dt < 0) dt = 0;
+    v0 += Math.abs(plotData[i].a) * dt;
   }
 
   // Ungeglättet
@@ -402,6 +411,7 @@ function processMeasurement() {
     let sum = 0, tSum = 0;
     for (let i = 1; i < brakeDataSmooth.length; i++) {
       let dt = brakeDataSmooth[i].t - brakeDataSmooth[i-1].t;
+      if (dt < 0) dt = 0;
       sum += Math.abs(brakeDataSmooth[i].a) * dt;
       tSum += dt;
     }
@@ -422,14 +432,12 @@ function processMeasurement() {
   document.getElementById('status').innerHTML = 'Stillstand erkannt.';
 
   // Plot anzeigen (ungeglättet und geglättet)
-  let png = showAccPlot(data, true, {
+  let png = showAccPlot(plotData, true, {
     tThreshStart: t_beg,
-    tThreshEnd: t_end,
-    brakeDataRaw,
-    brakeDataSmooth
+    tThreshEnd: t_end
   });
   plotPNGs.push(png);
-  accHistories.push(data.map(d => ({t: d.relT, a: d.a})));
+  accHistories.push(plotData.map(d => ({t: d.t, a: d.a})));
   results.push({
     time: time,
     startSpeed: v0.toFixed(2),
