@@ -52,11 +52,11 @@
     <label for="debugRohDropdown">Rohdatensatz:</label>
     <select id="debugRohDropdown" style="margin-right:1em;">
       <option value="1">Rohdatensatz 1</option>
-      <option value="2">Rohdatensatz 2</option>
+      <option value="2" selected>Rohdatensatz 2</option>
       <option value="3">Rohdatensatz 3</option>
     </select>
     <label for="debugV0Input">Anfangsgeschwindigkeit (m/s):</label>
-    <input type="number" id="debugV0Input" value="0" min="0" step="0.1" style="width:5em;margin-right:1em;">
+    <input type="number" id="debugV0Input" value="3" min="0" step="0.1" style="width:5em;margin-right:1em;">
     <button id="debugRohBtn" style="background:#e1b12c;">Debug: Rohdaten auswerten</button>
   </div>
     <div class="flex-row"><span>Schwellenwert Verzögerung (m/s²):</span>
@@ -476,9 +476,14 @@ function updateResultsList() {
       r.timestamp = `${datum}; ${uhrzeit} Uhr`;
     }
     html += `<div style='margin-bottom:1.5em;padding:0.5em;background:#f8f8f8;border-radius:0.5em;'>`;
-    html += `<b>Messung ${messungsNummer} (${r.timestamp})</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Mittlere Verzögerung: ${r.meanA} m/s², Bremsweg: ${r.distance}m`;
-    html += `<br><span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span>`;
-    html += `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${r.normBremsweg} m</span>`;
+    html += `<b>Messung ${messungsNummer} (${r.timestamp})</b><br>`;
+    html += `Zeit: ${r.time}s<br>`;
+    html += `Startgeschw.: ${r.startSpeed}m/s<br>`;
+    html += `Mittlere Verzögerung: ${r.meanA} m/s²<br>`;
+    html += `Bremsweg 1 (Integ. a_geglättet): ${r.distance}m<br>`;
+    html += `v1_rest: ${r.vEnd} m/s<br>`;
+    html += `<span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span><br>`;
+    html += `<br>`;
     html += `<br><span class='plotimg' id='plotimg${i}'></span>`;
     html += `</div>`;
   });
@@ -727,13 +732,6 @@ function processMeasurement() {
       if (dt < 0) dt = 0; // Sicherheit
       let aVal = Math.abs(data[i].a);
       v[i] = v[i-1] - aVal * dt;
-      if (v[i] < 0) {
-        // Interpolieren, wann v=0 erreicht wurde
-        let frac = v[i-1] / (v[i-1] - v[i]);
-        let tZero = data[i-1].t + frac * (data[i].t - data[i-1].t);
-        s += (v[i-1] + 0) / 2 * (tZero - data[i-1].t);
-        return { s, v };
-      }
       s += (v[i-1] + v[i]) / 2 * dt;
     }
     return { s, v };
@@ -822,7 +820,7 @@ results.unshift({
   distance: resSmooth.s.toFixed(2),
   vergleichsweg: vergleichsweg.toFixed(2),
   meanA: meanA.toFixed(2),
-  normBremsweg: resSmooth.s.toFixed(2)
+  vEnd: (resSmooth.v && resSmooth.v.length > 0 && typeof resSmooth.v[resSmooth.v.length-1] === 'number') ? resSmooth.v[resSmooth.v.length-1].toFixed(2) : '0.00'
 });
   updateResultsList();
 }
