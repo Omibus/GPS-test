@@ -6,8 +6,8 @@
   <title>Bremsweg-Messung Mobil</title>
   <style>
     body { font-family: 'Segoe UI', Arial, sans-serif; background: #f5f6fa; margin: 0; }
-    .container { max-width: 400px; margin: 2rem auto; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; padding-left:2rem; padding-right:2rem; }
-    h1 { text-align: center; }
+    .container { max-width: 400px; margin: 2rem auto; margin-top: 1rem; background: #fff; border-radius: 1rem; box-shadow: 0 4px 24px rgba(0,0,0,0.12); padding: 2rem; padding-left:2rem; padding-right:2rem; }
+    h1 { text-align: center; font-size: 1.5rem; line-height: 1.2; }
     label { display: block; margin-top: 1rem; }
     input, select { width: 100%; padding: 0.5rem; margin: 0; border-radius: 0.5rem; border: 1px solid #ccc; box-sizing: border-box; height: 2.5em; }
     button { margin-top: 1.5rem; width: 100%; padding: 1rem; border: none; border-radius: 0.5rem; background: #4cd137; color: #fff; font-size: 1.2rem; cursor: pointer; box-sizing: border-box; }
@@ -31,16 +31,19 @@
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     button:disabled { background: #aaa; }
-    .result { margin-top: 2rem; background: #f0f0f0; padding: 1rem; border-radius: 0.5rem; }
+    .result { margin-top: 1rem; background: #f0f0f0; padding: 1rem; border-radius: 0.5rem; }
     .status { margin-top: 1rem; color: #888; font-size: 0.9rem; }
-    .speed { font-size: 1.2rem; margin-top: 1rem; text-align: center; }
+    .speed { font-size: 1rem; margin-top: 0.5rem; text-align: center; }
   </style>
 </head>
 <body>
   <div class="container">
     <h1>Bremsweg-Messung</h1>
-    <div class="speed" id="speed">Geschwindigkeit: 0 m/s</div>
-    <div class="speed" id="gps">GPS: - / -</div>
+    <div class="flex-row" style="justify-content:space-between; margin-top:1rem;">
+      <div class="speed" id="speed">v: 0 m/s</div>
+      <div class="speed" id="acceleration">a: 0 m/s²</div>
+      <div class="speed" id="gps">GPS: - / -</div>
+    </div>
     <div style="margin-top:0.5rem; display:flex; gap:0.5em; align-items:center;">
       <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. grav.</button>
       <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
@@ -83,7 +86,7 @@
     <button id="startBtn">Messung starten</button>
     <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
     <button id="clearBtn" style="background:#888;margin-top:0.5rem;">Clear</button>
-    <div class="speed" id="acceleration">Verzögerung: 0 m/s²</div>
+    
     <div class="status" id="status"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
@@ -210,7 +213,7 @@ document.getElementById('stopBtn').onclick = function() {
   trigger2Reached = false;
   if (document.getElementById('result')) { document.getElementById('result').innerHTML = ''; }
   if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.'; }
-  if (document.getElementById('acceleration')) { document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²'; }
+  if (document.getElementById('acceleration')) { document.getElementById('acceleration').innerHTML = 'a: 0 m/s²'; }
 };
 
 document.getElementById('clearBtn').onclick = function() {
@@ -304,7 +307,7 @@ window.addEventListener('devicemotion', function(event) {
   // relT im Buffer aktualisieren (relativ zu jetzt)
   accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
   // Anzeige immer aktualisieren
-  document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
+  document.getElementById('acceleration').innerHTML = `a${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
 
   // --- Messung läuft? Dann Messdaten erfassen ---
   if (measuring) {
@@ -965,7 +968,7 @@ if ('geolocation' in navigator) {
   navigator.geolocation.watchPosition(function(pos) {
     if (pos.coords.speed != null) {
       let currentSpeed = Math.max(0, pos.coords.speed);
-      document.getElementById('speed').innerHTML = `Geschwindigkeit: ${currentSpeed.toFixed(2)} m/s`;
+      document.getElementById('speed').innerHTML = `v: ${currentSpeed.toFixed(2)} m/s`;
     }
     if (pos.coords.latitude != null && pos.coords.longitude != null) {
       document.getElementById('gps').innerHTML = `GPS: ${pos.coords.latitude.toFixed(6)} / ${pos.coords.longitude.toFixed(6)}`;
