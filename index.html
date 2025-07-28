@@ -88,46 +88,23 @@
     <div class="result" id="result"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
-    <div style="margin-top:1.5em; display:flex; align-items:center; gap:0.5em;">
-      <input type="checkbox" id="debugModeToggle">
-      <label for="debugModeToggle" style="margin:0;">Debug-Modus</label>
-      <span style="margin-left:0.5em;">v<sub>0</sub>:</span>
-      <input type="number" id="debugV0" value="1.0" min="0" max="20" step="0.1" style="width:4em;">
-      <span>m/s</span>
-    </div>
+    <button id="debugSinusBtn" style="background:#e1b12c;margin-top:1em;">DEBUG: Sinus-Testdiagramm</button>
   </div>
   <script>
-// --- DEBUG: Simulationsdaten für Debug-Modus generieren ---
-let debugMode = false;
-let debugV0 = 1.0;
-let debugSimData = [];
-
-function generateDebugSimData(v0, decelThreshold, stopThreshold) {
-  // Simuliere eine Sinuskurve mit variabler Amplitude und Wellenlänge
+// --- DEBUG: Testfunktion für synthetische Sinus-Messung ---
+function debugTestSinusMessung() {
+  let v0 = 1.0; // m/s
+  let peakA = 5.0; // m/s²
+  let period = 1.0; // s
   let dt = 0.02; // 50 Hz
-  let t = 0;
-  let tMax = 8.0; // bis zu 8s, reicht für mehrere Zyklen
+  let tMax = 2.0; // 2s
+  let decelThreshold = 2.0;
+  let stopThreshold = 0.3;
   let accData = [];
-  let phase = Math.random() * 2 * Math.PI;
-  let amp = 3 + Math.random() * 5; // Startamplitude 3..8
-  let period = 1 + Math.random() * 2; // Startwellenlänge 1..3s
-  let ampDir = 1;
-  let periodDir = 1;
-  let ampSpeed = 0.15 + Math.random()*0.1; // wie schnell Amplitude sich ändert
-  let periodSpeed = 0.12 + Math.random()*0.08; // wie schnell Periode sich ändert
-  while (t <= tMax) {
-    // Amplitude und Periode langsam variieren
-    amp += ampDir * ampSpeed * dt;
-    if (amp > 8) { amp = 8; ampDir = -1; }
-    if (amp < 3) { amp = 3; ampDir = 1; }
-    period += periodDir * periodSpeed * dt;
-    if (period > 3) { period = 3; periodDir = -1; }
-    if (period < 1) { period = 1; periodDir = 1; }
-    let a = amp * Math.sin(2 * Math.PI * t / period + phase);
+  for (let t = 0; t <= tMax; t += dt) {
+    let a = peakA * Math.sin(2 * Math.PI * t / period);
     accData.push({ t: t*1000, relT: t, a: a });
-    t += dt;
   }
-  // Triggerpunkte suchen wie im echten Code
   let idx1 = -1, t1 = null, a1 = null;
   for (let i = 0; i < accData.length; i++) {
     if (Math.abs(accData[i].a) >= decelThreshold) {
@@ -153,7 +130,6 @@ function generateDebugSimData(v0, decelThreshold, stopThreshold) {
       break;
     }
   }
-  // Bereich wie im echten Code
   let tStart = Math.max(0, t1 - 1.0);
   let tEnd = t2 + 1.0;
   let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
@@ -180,7 +156,6 @@ function generateDebugSimData(v0, decelThreshold, stopThreshold) {
   data.forEach(d => { delete d._trigger1; delete d._trigger2; });
   trigger1Point._trigger1 = true;
   trigger2Point._trigger2 = true;
-  // Zeitachse für Plot und Integration: relT auf 0 normieren
   let t0 = data[0].relT;
   let plotData = data.map(d => {
     let tNorm = d.relT - t0;
@@ -189,70 +164,12 @@ function generateDebugSimData(v0, decelThreshold, stopThreshold) {
     if (d._trigger2) obj._trigger2 = true;
     return obj;
   });
-  return plotData;
+  showAccPlot(plotData, false, {
+    tThreshStart: t1 - tStart,
+    tThreshEnd: t2 - tStart
+  });
 }
-
-// Debug-UI-Events
-
-let debugSimInterval = null;
-let debugSimIdx = 0;
-function startDebugSimulation() {
-  debugV0 = parseFloat(document.getElementById('debugV0').value) || 1.0;
-  decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
-  stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
-  debugSimData = generateDebugSimData(debugV0, decelThreshold, stopThreshold);
-  debugSimIdx = 0;
-  if (debugSimInterval) clearInterval(debugSimInterval);
-  function fireSimEvent(d) {
-    let simVal = d.a;
-    let dir = document.getElementById('direction').value;
-    let acc = { x: 0, y: 0, z: 0 };
-    if (dir === 'x') acc.x = simVal;
-    else if (dir === 'y') acc.y = simVal;
-    else if (dir === 'z') acc.z = simVal;
-    else if (dir === 'betrag') acc.x = simVal;
-    let event = new CustomEvent('devicemotion', {
-      detail: {
-        acceleration: { x: acc.x, y: acc.y, z: acc.z },
-        accelerationIncludingGravity: { x: acc.x, y: acc.y, z: acc.z }
-      }
-    });
-    event.acceleration = { x: acc.x, y: acc.y, z: acc.z };
-    event.accelerationIncludingGravity = { x: acc.x, y: acc.y, z: acc.z };
-    window.dispatchEvent(event);
-  }
-  debugSimInterval = setInterval(() => {
-    if (!debugMode) { clearInterval(debugSimInterval); return; }
-    fireSimEvent(debugSimData[debugSimIdx]);
-    debugSimIdx = (debugSimIdx + 1) % debugSimData.length;
-  }, 20);
-}
-function stopDebugSimulation() {
-  if (debugSimInterval) { clearInterval(debugSimInterval); debugSimInterval = null; }
-}
-document.getElementById('debugModeToggle').addEventListener('change', function() {
-  debugMode = this.checked;
-  document.getElementById('debugV0').disabled = !debugMode;
-  if (debugMode) {
-    startDebugSimulation();
-  } else {
-    stopDebugSimulation();
-  }
-});
-document.getElementById('debugV0').addEventListener('input', function() {
-  debugV0 = parseFloat(this.value) || 1.0;
-  if (debugMode) startDebugSimulation();
-});
-document.getElementById('direction').addEventListener('change', function() {
-  if (debugMode) startDebugSimulation();
-});
-document.getElementById('decelThreshold').addEventListener('input', function() {
-  if (debugMode) startDebugSimulation();
-});
-document.getElementById('stopThreshold').addEventListener('input', function() {
-  if (debugMode) startDebugSimulation();
-});
-document.getElementById('debugV0').disabled = true;
+document.getElementById('debugSinusBtn').onclick = debugTestSinusMessung;
 let accBuffer = [];
 let accData = [];
 let trigger1Reached = false;
@@ -292,19 +209,14 @@ document.getElementById('startBtn').onclick = function() {
   measuringUseGravity = useGravity; // Für diese Messung merken
   let now = performance.now();
   startTime = now;
+  // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
+  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a }));
   trigger1Reached = false;
   trigger2Reached = false;
   postStopTimeout = null;
   stopTime = null;
   document.getElementById('result').innerHTML = '';
   document.getElementById('status').innerHTML = 'Messdatenerfassung läuft...';
-
-  if (debugMode) {
-    // Im Debug-Modus übernimmt die globale Simulation alles, kein neues Intervall!
-    return;
-  }
-  // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
-  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a }));
 };
 
 document.getElementById('stopBtn').onclick = function() {
@@ -372,98 +284,87 @@ function updateResultsList() {
       imgDiv.appendChild(canvasSmooth);
     }
   });
+}
 
 // --- Messdatenerfassung ---
-// --- Unified devicemotion event handler: always processes the same event type ---
-if (!window._unifiedSensorHandlerAdded) {
-  window._unifiedSensorHandlerAdded = true;
-  window.addEventListener('devicemotion', function(event) {
-    // In debug mode: ignore real sensor events, only process simulated events (which have event.detail)
-    if (debugMode && !(event.detail && event.detail.acceleration)) {
-      return;
-    }
-    // In real mode: ignore simulated events (which have event.detail)
-    if (!debugMode && event.detail && event.detail.acceleration) {
-      return;
-    }
-    // --- Always use the event data as provided ---
-    let accRaw = useGravity ? event.accelerationIncludingGravity : event.acceleration;
-    if (!accRaw) return;
-    let wx = parseFloat(document.getElementById('winkelX').value) || 0;
-    let wy = parseFloat(document.getElementById('winkelY').value) || 0;
-    let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
-    let vec = rotateVector(accRaw.x || 0, accRaw.y || 0, accRaw.z || 0, wx, wy, wz);
-    let a = 0;
-    let dir = direction;
-    if (dir === 'betrag') {
-      a = Math.sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+window.addEventListener('devicemotion', function(event) {
+  // --- Immer aktuellen Beschleunigungswert berechnen und anzeigen ---
+  let accRaw = useGravity ? event.accelerationIncludingGravity : event.acceleration;
+  if (!accRaw) return;
+  let wx = parseFloat(document.getElementById('winkelX').value) || 0;
+  let wy = parseFloat(document.getElementById('winkelY').value) || 0;
+  let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
+  let vec = rotateVector(accRaw.x || 0, accRaw.y || 0, accRaw.z || 0, wx, wy, wz);
+  let a = 0;
+  let dir = direction;
+  if (dir === 'betrag') {
+    a = Math.sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
+  } else {
+    a = vec[dir] || 0;
+  }
+  let now = performance.now();
+  // Buffer auf 1s begrenzen
+  accBuffer.push({t: now, relT: 0, a: a});
+  while (accBuffer.length > 0 && (now - accBuffer[0].t) > 1100) accBuffer.shift();
+  // relT im Buffer aktualisieren (relativ zu jetzt)
+  accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
+  // Anzeige immer aktualisieren
+  document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
+
+  // --- Messung läuft? Dann Messdaten erfassen ---
+  if (measuring) {
+    let acc = measuringUseGravity ? event.accelerationIncludingGravity : event.acceleration;
+    if (!acc) return;
+    let wxM = parseFloat(document.getElementById('winkelX').value) || 0;
+    let wyM = parseFloat(document.getElementById('winkelY').value) || 0;
+    let wzM = parseFloat(document.getElementById('winkelZ').value) || 0;
+    let vecM = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wxM, wyM, wzM);
+    let aM = 0;
+    if (direction === 'betrag') {
+      aM = Math.sqrt(vecM.x*vecM.x + vecM.y*vecM.y + vecM.z*vecM.z);
     } else {
-      a = vec[dir] || 0;
+      aM = vecM[direction] || 0;
     }
-    let now = performance.now();
-    // Buffer auf 1s begrenzen
-    accBuffer.push({t: now, relT: 0, a: a});
-    while (accBuffer.length > 0 && (now - accBuffer[0].t) > 1100) accBuffer.shift();
-    // relT im Buffer aktualisieren (relativ zu jetzt)
-    accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
-    // Anzeige immer aktualisieren
-    document.getElementById('acceleration').innerHTML = `Verzögerung${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
+    let relTime = (now - startTime) / 1000;
+    accData.push({t: now, relT: relTime, a: aM});
 
-    // --- Messung läuft? Dann Messdaten erfassen ---
-    if (measuring) {
-      let acc = measuringUseGravity ? event.accelerationIncludingGravity : event.acceleration;
-      if (!acc) return;
-      let wxM = parseFloat(document.getElementById('winkelX').value) || 0;
-      let wyM = parseFloat(document.getElementById('winkelY').value) || 0;
-      let wzM = parseFloat(document.getElementById('winkelZ').value) || 0;
-      let vecM = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wxM, wyM, wzM);
-      let aM = 0;
-      if (direction === 'betrag') {
-        aM = Math.sqrt(vecM.x*vecM.x + vecM.y*vecM.y + vecM.z*vecM.z);
-      } else {
-        aM = vecM[direction] || 0;
-      }
-      let relTime = (now - startTime) / 1000;
-      accData.push({t: now, relT: relTime, a: aM});
+    // Trigger 1 prüfen (erstes Überschreiten decelThreshold)
+    if (!trigger1Reached && Math.abs(aM) >= decelThreshold) {
+      trigger1Reached = true;
+      document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
+    }
 
-      // Trigger 1 prüfen (erstes Überschreiten decelThreshold)
-      if (!trigger1Reached && Math.abs(aM) >= decelThreshold) {
-        trigger1Reached = true;
-        document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
-      }
-
-      // Trigger 2 prüfen (erstes Unterschreiten stopThreshold oder Vorzeichenwechsel nach Trigger 1)
-      if (trigger1Reached && !trigger2Reached && accData.length > 1) {
-        let prev = accData[accData.length-2];
-        let curr = accData[accData.length-1];
-        if (Math.abs(curr.a) < stopThreshold) {
-          trigger2Reached = true;
-          document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
-          if (!postStopTimeout) {
-            postStopTimeout = setTimeout(() => {
-              measuring = false;
-              stopTime = performance.now();
-              processMeasurement();
-            }, 1000);
-          }
-        } else if (Math.sign(prev.a) !== Math.sign(curr.a)) {
-          trigger2Reached = true;
-          document.getElementById('status').innerHTML = 'Trigger 2 erreicht (Vorzeichenwechsel), Nachlauf...';
-          if (!postStopTimeout) {
-            postStopTimeout = setTimeout(() => {
-              measuring = false;
-              stopTime = performance.now();
-              processMeasurement();
-            }, 1000);
-          }
+    // Trigger 2 prüfen (erstes Unterschreiten stopThreshold oder Vorzeichenwechsel nach Trigger 1)
+    if (trigger1Reached && !trigger2Reached && accData.length > 1) {
+      let prev = accData[accData.length-2];
+      let curr = accData[accData.length-1];
+      if (Math.abs(curr.a) < stopThreshold) {
+        trigger2Reached = true;
+        document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
+        if (!postStopTimeout) {
+          postStopTimeout = setTimeout(() => {
+            measuring = false;
+            stopTime = performance.now();
+            processMeasurement();
+          }, 1000);
+        }
+      } else if (Math.sign(prev.a) !== Math.sign(curr.a)) {
+        trigger2Reached = true;
+        document.getElementById('status').innerHTML = 'Trigger 2 erreicht (Vorzeichenwechsel), Nachlauf...';
+        if (!postStopTimeout) {
+          postStopTimeout = setTimeout(() => {
+            measuring = false;
+            stopTime = performance.now();
+            processMeasurement();
+          }, 1000);
         }
       }
     }
-  });
-}
+  }
+});
 
 // --- Messdatenauswertung und Bremsweg-Berechnung ---
-function processMeasurement(isDebug) {
+function processMeasurement() {
   // --- Triggerpunkte im Datenarray suchen (erst jetzt, nicht während Messung!) ---
   // 1. Trigger: erster Messwert, der Betrag >= decelThreshold
   let idx1 = -1, t1 = null, a1 = null;
@@ -610,14 +511,10 @@ function processMeasurement(isDebug) {
 
   // Startgeschwindigkeit: Integration rückwärts bis t_beg
   let v0 = 0;
-  if (isDebug) {
-    v0 = parseFloat(document.getElementById('debugV0').value) || 1.0;
-  } else {
-    for (let i = idx_beg-1; i >= 0; i--) {
-      let dt = plotData[i+1].t - plotData[i].t;
-      if (dt < 0) dt = 0;
-      v0 += Math.abs(plotData[i].a) * dt;
-    }
+  for (let i = idx_beg-1; i >= 0; i--) {
+    let dt = plotData[i+1].t - plotData[i].t;
+    if (dt < 0) dt = 0;
+    v0 += Math.abs(plotData[i].a) * dt;
   }
 
   // Ungeglättet
@@ -670,12 +567,6 @@ function processMeasurement(isDebug) {
   document.getElementById('result').appendChild(canvasSmooth);
 
   document.getElementById('status').innerHTML = 'Stillstand erkannt.';
-  // Falls im Debug-Nachlauf, Status überschreiben
-  if (typeof debugMode !== 'undefined' && debugMode) {
-    setTimeout(() => {
-      document.getElementById('status').innerHTML = 'Debug-Messung abgeschlossen.';
-    }, 10);
-  }
 
   // Für Historie beide Kurven speichern
   plotPNGs.push(canvasRaw.toDataURL('image/png'));
@@ -953,6 +844,24 @@ document.getElementById('exportBtn').onclick = function() {
     XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
   });
 };
+
+document.getElementById('calibBtn').onclick = function() {
+  // Hole aktuelle Beschleunigung inkl. Gravitation
+  let acc = window.lastAccInclGrav;
+  if (!acc) {
+    alert('Keine Beschleunigungsdaten verfügbar. Bitte das Gerät ruhig halten und kurz warten.');
+    return;
+  }
+  // Berechne Winkel zwischen Beschleunigungsvektor und Z-Achse
+  let ax = acc.x || 0;
+  let ay = acc.y || 0;
+  let az = acc.z || 0;
+  let g = Math.sqrt(ax*ax + ay*ay + az*az);
+  if (g === 0) {
+    alert('Ungültige Sensordaten.');
+    return;
+  }
+  // Winkel zur Z-Achse (in Grad)
   let winkelX = Math.acos(az/g) * 180 / Math.PI;
   if (ax < 0) winkelX = -winkelX;
   document.getElementById('winkelX').value = winkelX.toFixed(1);
