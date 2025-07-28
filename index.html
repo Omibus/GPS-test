@@ -176,7 +176,23 @@ const ACC_BUFFER_SEC = 1.0; // 1s Vorlauf
 // rotateVector Dummy, falls nicht definiert
 if (typeof rotateVector !== 'function') {
   function rotateVector(x, y, z, wx, wy, wz) {
-    return { x: x, y: y, z: z };
+    // wx, wy, wz in Grad -> in Radiant
+    let rx = wx * Math.PI / 180;
+    let ry = wy * Math.PI / 180;
+    let rz = wz * Math.PI / 180;
+    // Rotation um X
+    let y1 = y * Math.cos(rx) - z * Math.sin(rx);
+    let z1 = y * Math.sin(rx) + z * Math.cos(rx);
+    let x1 = x;
+    // Rotation um Y
+    let x2 = x1 * Math.cos(ry) + z1 * Math.sin(ry);
+    let z2 = -x1 * Math.sin(ry) + z1 * Math.cos(ry);
+    let y2 = y1;
+    // Rotation um Z
+    let x3 = x2 * Math.cos(rz) - y2 * Math.sin(rz);
+    let y3 = x2 * Math.sin(rz) + y2 * Math.cos(rz);
+    let z3 = z2;
+    return { x: x3, y: y3, z: z3 };
   }
 }
 // useGravity beim Laden auf den Zustand des Kontrollkästchens setzen
