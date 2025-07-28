@@ -292,9 +292,9 @@ window.addEventListener('devicemotion', function(event) {
   let wx = parseFloat(document.getElementById('winkelX').value) || 0;
   let wy = parseFloat(document.getElementById('winkelY').value) || 0;
   let wz = parseFloat(document.getElementById('winkelZ').value) || 0;
+  let dir = document.getElementById('direction').value;
   let vec = rotateVector(accRaw.x || 0, accRaw.y || 0, accRaw.z || 0, wx, wy, wz);
   let a = 0;
-  let dir = direction;
   if (dir === 'betrag') {
     a = Math.sqrt(vec.x*vec.x + vec.y*vec.y + vec.z*vec.z);
   } else {
@@ -316,12 +316,13 @@ window.addEventListener('devicemotion', function(event) {
     let wxM = parseFloat(document.getElementById('winkelX').value) || 0;
     let wyM = parseFloat(document.getElementById('winkelY').value) || 0;
     let wzM = parseFloat(document.getElementById('winkelZ').value) || 0;
+    let dirM = document.getElementById('direction').value;
     let vecM = rotateVector(acc.x || 0, acc.y || 0, acc.z || 0, wxM, wyM, wzM);
     let aM = 0;
-    if (direction === 'betrag') {
+    if (dirM === 'betrag') {
       aM = Math.sqrt(vecM.x*vecM.x + vecM.y*vecM.y + vecM.z*vecM.z);
     } else {
-      aM = vecM[direction] || 0;
+      aM = vecM[dirM] || 0;
     }
     let relTime = (now - startTime) / 1000;
     accData.push({t: now, relT: relTime, a: aM});
