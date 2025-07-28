@@ -98,7 +98,6 @@
     <button id="clearBtn" style="background:#888;margin-top:0.5rem;">Clear</button>
     <div class="speed" id="acceleration">Verzögerung: 0 m/s²</div>
     <div class="status" id="status"></div>
-    <div class="result" id="result"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
     <button id="debugSinusBtn" style="background:#e1b12c;margin-top:1em;">DEBUG: Sinus-Testdiagramm</button>
@@ -175,7 +174,7 @@ function processMeasurementDebug(v0) {
     }
   }
   if (t1 === null || t2 === null) {
-    document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.';
+    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.'; }
     return;
   }
   let tStart = Math.max(0, t1 - 1.0);
@@ -205,7 +204,7 @@ function processMeasurementDebug(v0) {
   trigger1Point._trigger1 = true;
   trigger2Point._trigger2 = true;
   if (data.length === 0) {
-    document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.';
+    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.'; }
     return;
   }
   let t0 = data[0].relT;
@@ -283,13 +282,15 @@ function processMeasurementDebug(v0) {
   let vergleichsweg = meanA > 0 ? (Math.pow(v0,2)/(2*meanA)) : 0;
   let brakeTime = (t_end - t_beg);
   let time = brakeTime.toFixed(2);
-  document.getElementById('result').innerHTML =
-    `<b>Debug-Auswertung beendet!</b><br>Benötigte Zeit: ${time} s<br>Startgeschwindigkeit: ${v0.toFixed(2)} m/s` +
-    `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-    `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-    `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
-    `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
-    `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
+  if (document.getElementById('result')) {
+    document.getElementById('result').innerHTML =
+      `<b>Debug-Auswertung beendet!</b><br>Benötigte Zeit: ${time} s<br>Startgeschwindigkeit: ${v0.toFixed(2)} m/s` +
+      `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+      `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+      `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
+      `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
+      `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
+  }
   let canvasRaw = document.createElement('canvas');
   canvasRaw.width = 320;
   canvasRaw.height = 140;
@@ -297,8 +298,10 @@ function processMeasurementDebug(v0) {
     tThreshStart: t_beg,
     tThreshEnd: t_end
   }, canvasRaw);
-  document.getElementById('result').appendChild(canvasRaw);
-  document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
+  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasRaw); }
+  if (document.getElementById('result')) {
+    document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
+  }
   let canvasSmooth = document.createElement('canvas');
   canvasSmooth.width = 320;
   canvasSmooth.height = 140;
@@ -306,8 +309,8 @@ function processMeasurementDebug(v0) {
     tThreshStart: brakeDataSmooth.find(d=>d._trigger1)?.t ?? brakeDataSmooth[0].t,
     tThreshEnd: brakeDataSmooth.find(d=>d._trigger2)?.t ?? brakeDataSmooth[brakeDataSmooth.length-1].t
   }, canvasSmooth);
-  document.getElementById('result').appendChild(canvasSmooth);
-  document.getElementById('status').innerHTML = 'Debug-Auswertung abgeschlossen.';
+  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasSmooth); }
+  if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Debug-Auswertung abgeschlossen.'; }
 }
 // --- DEBUG: Testfunktion für synthetische Sinus-Messung ---
 function debugTestSinusMessung() {
@@ -433,8 +436,8 @@ document.getElementById('startBtn').onclick = function() {
   trigger2Reached = false;
   postStopTimeout = null;
   stopTime = null;
-  document.getElementById('result').innerHTML = '';
-  document.getElementById('status').innerHTML = 'Messdatenerfassung läuft...';
+  if (document.getElementById('result')) { document.getElementById('result').innerHTML = ''; }
+  if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Messdatenerfassung läuft...'; }
 };
 
 document.getElementById('stopBtn').onclick = function() {
@@ -445,9 +448,9 @@ document.getElementById('stopBtn').onclick = function() {
   accData = [];
   trigger1Reached = false;
   trigger2Reached = false;
-  document.getElementById('result').innerHTML = '';
-  document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.';
-  document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²';
+  if (document.getElementById('result')) { document.getElementById('result').innerHTML = ''; }
+  if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Messung gestoppt. Werte können angepasst werden.'; }
+  if (document.getElementById('acceleration')) { document.getElementById('acceleration').innerHTML = 'Verzögerung: 0 m/s²'; }
 };
 
 document.getElementById('clearBtn').onclick = function() {
@@ -463,8 +466,17 @@ function updateResultsList() {
   }
   let html = '<b>Messungen:</b>';
   results.forEach((r, i) => {
+    // Nummerierung: älteste Messung = 1, neueste = results.length
+    const messungsNummer = results.length - i;
+    // Zeitstempel erzeugen (beim ersten Mal speichern)
+    if (!r.timestamp) {
+      const now = new Date();
+      const datum = now.toLocaleDateString('de-DE');
+      const uhrzeit = now.toLocaleTimeString('de-DE');
+      r.timestamp = `${datum}; ${uhrzeit} Uhr`;
+    }
     html += `<div style='margin-bottom:1.5em;padding:0.5em;background:#f8f8f8;border-radius:0.5em;'>`;
-    html += `<b>Nr. ${i+1}</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Mittlere Verzögerung: ${r.meanA} m/s², Bremsweg: ${r.distance}m`;
+    html += `<b>Messung ${messungsNummer} (${r.timestamp})</b>: Zeit: ${r.time}s, Startgeschw.: ${r.startSpeed}m/s, Mittlere Verzögerung: ${r.meanA} m/s², Bremsweg: ${r.distance}m`;
     html += `<br><span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span>`;
     html += `<br><span style='color:#888;'>Bremsweg (normierte Kurve): ${r.normBremsweg} m</span>`;
     html += `<br><span class='plotimg' id='plotimg${i}'></span>`;
@@ -549,7 +561,7 @@ window.addEventListener('devicemotion', function(event) {
     // Trigger 1 prüfen (erstes Überschreiten decelThreshold)
     if (!trigger1Reached && Math.abs(aM) >= decelThreshold) {
       trigger1Reached = true;
-      document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...';
+      if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Trigger 1 erreicht, warte auf Trigger 2...'; }
     }
 
     // Trigger 2 prüfen (erstes Unterschreiten stopThreshold oder Vorzeichenwechsel nach Trigger 1)
@@ -558,7 +570,7 @@ window.addEventListener('devicemotion', function(event) {
       let curr = accData[accData.length-1];
       if (Math.abs(curr.a) < stopThreshold) {
         trigger2Reached = true;
-        document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...';
+        if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Trigger 2 erreicht, Nachlauf...'; }
         if (!postStopTimeout) {
           postStopTimeout = setTimeout(() => {
             measuring = false;
@@ -568,7 +580,7 @@ window.addEventListener('devicemotion', function(event) {
         }
       } else if (Math.sign(prev.a) !== Math.sign(curr.a)) {
         trigger2Reached = true;
-        document.getElementById('status').innerHTML = 'Trigger 2 erreicht (Vorzeichenwechsel), Nachlauf...';
+        if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Trigger 2 erreicht (Vorzeichenwechsel), Nachlauf...'; }
         if (!postStopTimeout) {
           postStopTimeout = setTimeout(() => {
             measuring = false;
@@ -612,7 +624,7 @@ function processMeasurement() {
     }
   }
   if (t1 === null || t2 === null) {
-    document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.';
+    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.'; }
     return;
   }
   // Zeitbereich: 1s vor Trigger1 bis 1s nach Trigger2 (relativ zu Messbeginn)
@@ -651,7 +663,7 @@ function processMeasurement() {
 
   // Zeitachse für Plot und Integration: relT auf 0 normieren
   if (data.length === 0) {
-    document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.';
+    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.'; }
     return;
   }
   let t0 = data[0].relT;
@@ -764,13 +776,15 @@ function processMeasurement() {
   // Ausgabe
   let brakeTime = (t_end - t_beg);
   let time = brakeTime.toFixed(2);
-  document.getElementById('result').innerHTML =
-    `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Startgeschwindigkeit: ${v0.toFixed(2)} m/s` +
-    `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-    `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-    `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
-    `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
-    `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
+  if (document.getElementById('result')) {
+    document.getElementById('result').innerHTML =
+      `<b>Messung beendet!</b><br>Benötigte Zeit: ${time} s<br>Startgeschwindigkeit: ${v0.toFixed(2)} m/s` +
+      `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
+      `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
+      `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
+      `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
+      `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
+  }
   // Ungeglätteter Plot
   let canvasRaw = document.createElement('canvas');
   canvasRaw.width = 320;
@@ -779,8 +793,13 @@ function processMeasurement() {
     tThreshStart: t_beg,
     tThreshEnd: t_end
   }, canvasRaw);
-  document.getElementById('result').appendChild(canvasRaw);
-  document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
+  // Entferne NUR die Anzeige des grauen Kastens mit den aktuellen Messwerten
+  // Die Daten- und Canvas-Erstellung bleibt erhalten
+  if (document.getElementById('result')) { document.getElementById('result').innerHTML = ''; }
+  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasRaw); }
+  if (document.getElementById('result')) {
+    document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
+  }
   // Geglätteter Plot
   let canvasSmooth = document.createElement('canvas');
   canvasSmooth.width = 320;
@@ -789,21 +808,22 @@ function processMeasurement() {
     tThreshStart: brakeDataSmooth.find(d=>d._trigger1)?.t ?? brakeDataSmooth[0].t,
     tThreshEnd: brakeDataSmooth.find(d=>d._trigger2)?.t ?? brakeDataSmooth[brakeDataSmooth.length-1].t
   }, canvasSmooth);
-  document.getElementById('result').appendChild(canvasSmooth);
+  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasSmooth); }
 
-  document.getElementById('status').innerHTML = 'Stillstand erkannt.';
+  if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Stillstand erkannt.'; }
 
   // Für Historie beide Kurven speichern
-  plotPNGs.push(canvasRaw.toDataURL('image/png'));
-  accHistories.push({raw: plotData.map(d => ({t: d.t, a: d.a, _trigger1: d._trigger1, _trigger2: d._trigger2})), smooth: brakeDataSmooth});
-  results.push({
-    time: time,
-    startSpeed: v0.toFixed(2),
-    distance: resSmooth.s.toFixed(2),
-    vergleichsweg: vergleichsweg.toFixed(2),
-    meanA: meanA.toFixed(2),
-    normBremsweg: resSmooth.s.toFixed(2)
-  });
+  // Ergebnisse in die Historie einfügen (neueste zuerst)
+  plotPNGs.unshift(canvasRaw.toDataURL('image/png'));
+accHistories.unshift({raw: plotData.map(d => ({t: d.t, a: d.a, _trigger1: d._trigger1, _trigger2: d._trigger2})), smooth: brakeDataSmooth});
+results.unshift({
+  time: time,
+  startSpeed: v0.toFixed(2),
+  distance: resSmooth.s.toFixed(2),
+  vergleichsweg: vergleichsweg.toFixed(2),
+  meanA: meanA.toFixed(2),
+  normBremsweg: resSmooth.s.toFixed(2)
+});
   updateResultsList();
 }
 
@@ -983,12 +1003,13 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
       // Vertikale gepunktete Linie
       ctx.save();
       ctx.setLineDash([4, 4]);
+     
       ctx.strokeStyle = '#e84118'; // rot wie Auswertebereich
       ctx.beginPath();
       ctx.moveTo(x, y);
       ctx.lineTo(x, h-pad+18);
       ctx.stroke();
-      ctx.setLineDash([]);
+           ctx.setLineDash([]);
       ctx.restore();
       // Zeitwert unter Achse
       ctx.save();
@@ -1128,7 +1149,7 @@ document.getElementById('calibBreakBtn').onclick = function() {
   // Schwellenwerte aus den Eingabefeldern holen
   window.breakDecelThreshold = parseFloat(document.getElementById('decelThreshold').value) || 2;
   window.breakStopThreshold = parseFloat(document.getElementById('stopThreshold').value) || 0.3;
-  document.getElementById('status').innerHTML = `Warte auf Bremsbeschleunigung (>${window.breakDecelThreshold} m/s²)...`;
+  if (document.getElementById('status')) { document.getElementById('status').innerHTML = `Warte auf Bremsbeschleunigung (>${window.breakDecelThreshold} m/s²)...`; }
 };
 
 window.lastAccInclGrav = null;
@@ -1143,12 +1164,12 @@ window.addEventListener('devicemotion', function(event) {
     if (aMag > ((window.breakDecelThreshold !== undefined ? window.breakDecelThreshold : 2))) {
       breakCalibState = 'measureAccel';
       breakAccs = [];
-      document.getElementById('status').innerHTML = 'Messe Bremsrichtung...';
+      if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Messe Bremsrichtung...'; }
       if (breakTimeout) { clearTimeout(breakTimeout); breakTimeout = null; }
       breakTimeout = setTimeout(function(){
         breakCalibState = 'waitForStill';
         breakGravAccs = [];
-        document.getElementById('status').innerHTML = `Warte auf Stillstand (<${window.breakStopThreshold !== undefined ? window.breakStopThreshold : 0.2} m/s² für 2s)...`;
+        if (document.getElementById('status')) { document.getElementById('status').innerHTML = `Warte auf Stillstand (<${window.breakStopThreshold !== undefined ? window.breakStopThreshold : 0.2} m/s² für 2s)...`; }
         breakTimeout = null;
       }, 500);
     }
@@ -1189,7 +1210,7 @@ window.addEventListener('devicemotion', function(event) {
         document.getElementById('winkelX').value = wx.toFixed(1);
         document.getElementById('winkelY').value = wy.toFixed(1);
         document.getElementById('winkelZ').value = wz.toFixed(1);
-        document.getElementById('status').innerHTML = 'Kalibrierung abgeschlossen.';
+        if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Kalibrierung abgeschlossen.'; }
         breakCalibState = null;
         breakAccs = [];
         breakGravAccs = [];
@@ -1268,15 +1289,15 @@ async function requestWakeLock() {
   if ('wakeLock' in navigator) {
     try {
       wakeLock = await navigator.wakeLock.request('screen');
-      document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).';
+      if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Bildschirm bleibt an (Wake Lock aktiv).'; }
       wakeLock.addEventListener('release', () => {
-        document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.';
+        if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Wake Lock wurde freigegeben.'; }
       });
     } catch (err) {
-      document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message;
+      if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Wake Lock Fehler: ' + err.message; }
     }
   } else {
-    document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.';
+    if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Wake Lock wird nicht unterstützt.'; }
   }
 }
 // Versuche Wake Lock bei User-Interaktion und Sichtbarkeitswechsel
