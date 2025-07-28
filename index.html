@@ -124,6 +124,9 @@ const debugRohdaten = {
 document.getElementById('debugRohBtn').onclick = function() {
   let sel = document.getElementById('debugRohDropdown').value;
   let v0 = parseFloat(document.getElementById('debugV0Input').value) || 0;
+  // Schwellenwerte wie bei Messung starten übernehmen
+  decelThreshold = parseFloat(document.getElementById('decelThreshold').value);
+  stopThreshold = parseFloat(document.getElementById('stopThreshold').value);
   let rohdaten = debugRohdaten[sel];
   if (!rohdaten || rohdaten.length === 0) {
     alert('Rohdatensatz leer oder nicht gefunden.');
@@ -137,9 +140,10 @@ document.getElementById('debugRohBtn').onclick = function() {
   postStopTimeout = null;
   stopTime = null;
   measuring = false;
-  // Messauswertung wie bei Messung starten, aber mit v0 aus Feld
-  // Die processMeasurement-Funktion muss v0 als Parameter akzeptieren
-  processMeasurementDebug(v0);
+  // Anfangsgeschwindigkeit für die Auswertung setzen
+  window.debugV0Override = v0;
+  // Hauptfunktion aufrufen
+  processMeasurement();
 };
 
 // Debug-Version von processMeasurement, die v0 als Parameter nimmt
@@ -724,11 +728,18 @@ function processMeasurement() {
   }
 
   // Startgeschwindigkeit: Integration rückwärts bis t_beg
-  let v0 = 0;
-  for (let i = idx_beg-1; i >= 0; i--) {
-    let dt = plotData[i+1].t - plotData[i].t;
-    if (dt < 0) dt = 0;
-    v0 += Math.abs(plotData[i].a) * dt;
+  let v0;
+  if (typeof window.debugV0Override === 'number') {
+    v0 = window.debugV0Override;
+    // Nach Auswertung wieder löschen
+    setTimeout(()=>{window.debugV0Override=undefined;},0);
+  } else {
+    v0 = 0;
+    for (let i = idx_beg-1; i >= 0; i--) {
+      let dt = plotData[i+1].t - plotData[i].t;
+      if (dt < 0) dt = 0;
+      v0 += Math.abs(plotData[i].a) * dt;
+    }
   }
 
   // Ungeglättet
