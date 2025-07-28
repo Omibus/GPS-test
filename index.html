@@ -323,7 +323,7 @@ window.addEventListener('devicemotion', function(event) {
   // relT im Buffer aktualisieren (relativ zu jetzt)
   accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
   // Anzeige immer aktualisieren
-  document.getElementById('acceleration').innerHTML = `a${useGravity ? ' inkl. Gravitation' : ''}: ${a.toFixed(2)} m/s²`;
+  document.getElementById('acceleration').innerHTML = `a${useGravity ? ' inkl. Grav.' : ''}: ${a.toFixed(2)} m/s²`;
 
   // --- Messung läuft? Dann Messdaten erfassen ---
   if (measuring) {
