@@ -826,20 +826,44 @@ function loadSheetJS(cb) {
 document.getElementById('exportBtn').onclick = function() {
   loadSheetJS(function() {
     let wb = XLSX.utils.book_new();
+    // Haupttabelle mit Messwerten
     let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)','Bremsweg (normierte Kurve)']];
     results.forEach((r,i)=>{
       ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA, r.normBremsweg]);
     });
     let ws = XLSX.utils.aoa_to_sheet(ws_data);
     XLSX.utils.book_append_sheet(wb, ws, 'Messungen');
-    // Messwerte als weitere Sheets
+
+    // Für jeden Datensatz: Rohdaten und geglättete Daten als eigene Sheets
     accHistories.forEach((hist,i)=>{
-      let plotData = [['Zeit (s)','Verzögerung (m/s²)']];
-      hist.forEach(d=>{
-        plotData.push([d.t.toFixed(3), d.a.toFixed(3)]);
-      });
-      let plotSheet = XLSX.utils.aoa_to_sheet(plotData);
-      XLSX.utils.book_append_sheet(wb, plotSheet, `Plot${i+1}`);
+      // Rohdaten
+      if (hist.raw) {
+        let rawData = [['Zeit (s)','Verzögerung (m/s²)','Trigger1','Trigger2']];
+        hist.raw.forEach(d=>{
+          rawData.push([
+            typeof d.t === 'number' ? d.t.toFixed(3) : '',
+            typeof d.a === 'number' ? d.a.toFixed(3) : '',
+            d._trigger1 ? 'X' : '',
+            d._trigger2 ? 'X' : ''
+          ]);
+        });
+        let rawSheet = XLSX.utils.aoa_to_sheet(rawData);
+        XLSX.utils.book_append_sheet(wb, rawSheet, `Rohdaten${i+1}`);
+      }
+      // Geglättete Daten
+      if (hist.smooth) {
+        let smoothData = [['Zeit (s)','Verzögerung (m/s²)','Trigger1','Trigger2']];
+        hist.smooth.forEach(d=>{
+          smoothData.push([
+            typeof d.t === 'number' ? d.t.toFixed(3) : '',
+            typeof d.a === 'number' ? d.a.toFixed(3) : '',
+            d._trigger1 ? 'X' : '',
+            d._trigger2 ? 'X' : ''
+          ]);
+        });
+        let smoothSheet = XLSX.utils.aoa_to_sheet(smoothData);
+        XLSX.utils.book_append_sheet(wb, smoothSheet, `Geglättet${i+1}`);
+      }
     });
     XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
   });
