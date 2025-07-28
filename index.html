@@ -261,6 +261,8 @@ function updateResultsList() {
     html += `Mittlere Verzögerung: ${r.meanA} m/s²<br>`;
     html += `Bremsweg 1 (Integ. a_geglättet): ${r.distance}m<br>`;
     html += `v1_rest: ${r.vEnd} m/s<br>`;
+    html += `Bremsweg 2 (a_normiert): ${r.normBremsweg}m<br>`;
+    html += `<span style='color:#888;'>skal_Bremsweg 2: ${r.skalNorm}</span><br>`;
     html += `<span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span><br>`;
     html += `<br>`;
     html += `<br><span class='plotimg' id='plotimg${i}'></span>`;
@@ -296,6 +298,20 @@ function updateResultsList() {
       labelSmooth.innerHTML = '<b>Geglättet</b>';
       imgDiv.appendChild(labelSmooth);
       imgDiv.appendChild(canvasSmooth);
+      // Normierte geglättete Kurve
+      if (results[i].normCurve) {
+        let canvasNorm = document.createElement('canvas');
+        canvasNorm.width = 320;
+        canvasNorm.height = 140;
+        showAccPlot(results[i].normCurve, false, {
+          tThreshStart: results[i].normCurve.find(d=>d._trigger1)?.t ?? results[i].normCurve[0].t,
+          tThreshEnd: results[i].normCurve.find(d=>d._trigger2)?.t ?? results[i].normCurve[results[i].normCurve.length-1].t
+        }, canvasNorm);
+        let labelNorm = document.createElement('div');
+        labelNorm.innerHTML = '<b>Normiert (Bremsweg 2)</b>';
+        imgDiv.appendChild(labelNorm);
+        imgDiv.appendChild(canvasNorm);
+      }
     }
   });
 }
@@ -551,6 +567,27 @@ function processMeasurement() {
   }
   let vergleichsweg = meanA > 0 ? (Math.pow(v0,2)/(2*meanA)) : 0;
 
+  // --- Normierte geglättete Kurve und Bremsweg 2 ---
+  // Nur Bremsbereich (zwischen Triggerpunkten)
+  let brakeSmoothSection = brakeDataSmooth.slice(idx_beg, idx_end+1);
+  let dtArr = [];
+  for (let i = 1; i < brakeSmoothSection.length; i++) {
+    dtArr.push(brakeSmoothSection[i].t - brakeSmoothSection[i-1].t);
+  }
+  // Finde Skalierungsfaktor k, sodass v0 - k*Integral(a_glatt*dt) = 0
+  let integralA = 0;
+  for (let i = 1; i < brakeSmoothSection.length; i++) {
+    integralA += brakeSmoothSection[i].a * dtArr[i-1];
+  }
+  let k = (integralA !== 0) ? (v0 / integralA) : 1;
+  // Skaliere die geglättete Kurve
+  let normCurve = brakeDataSmooth.map((d, i) => {
+    let aNorm = (i >= idx_beg && i <= idx_end) ? d.a * k : d.a;
+    return { t: d.t, a: aNorm, _trigger1: d._trigger1, _trigger2: d._trigger2 };
+  });
+  // Bremsweg mit normierter Kurve berechnen
+  let resNorm = integrateBrake(normCurve.slice(idx_beg, idx_end+1), v0);
+
   // Ausgabe
   let brakeTime = (t_end - t_beg);
   let time = brakeTime.toFixed(2);
@@ -600,7 +637,10 @@ results.unshift({
   distance: resSmooth.s.toFixed(2),
   vergleichsweg: vergleichsweg.toFixed(2),
   meanA: meanA.toFixed(2),
-  vEnd: (resSmooth.v && resSmooth.v.length > 0 && typeof resSmooth.v[resSmooth.v.length-1] === 'number') ? resSmooth.v[resSmooth.v.length-1].toFixed(2) : '0.00'
+  vEnd: (resSmooth.v && resSmooth.v.length > 0 && typeof resSmooth.v[resSmooth.v.length-1] === 'number') ? resSmooth.v[resSmooth.v.length-1].toFixed(2) : '0.00',
+  normBremsweg: resNorm.s.toFixed(2),
+  normCurve: normCurve,
+  skalNorm: k.toFixed(3)
 });
   updateResultsList();
 }
