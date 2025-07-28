@@ -1,4 +1,3 @@
-*** ENDE PATCH: DEBUG-Block entfernt ***
 <!DOCTYPE html>
 <html lang="de">
 <head>
@@ -100,7 +99,6 @@
     <div class="status" id="status"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
-    <button id="debugSinusBtn" style="background:#e1b12c;margin-top:1em;">DEBUG: Sinus-Testdiagramm</button>
   </div>
   <script>
 // --- Rohdatensätze als JS-Arrays ---
@@ -147,250 +145,11 @@ document.getElementById('debugRohBtn').onclick = function() {
 
 // Debug-Version von processMeasurement, die v0 als Parameter nimmt
 function processMeasurementDebug(v0) {
-  // --- Triggerpunkte im Datenarray suchen (erst jetzt, nicht während Messung!) ---
-  let idx1 = -1, t1 = null, a1 = null;
-  for (let i = 0; i < accData.length; i++) {
-    if (Math.abs(accData[i].a) >= decelThreshold) {
-      t1 = accData[i].relT;
-      a1 = accData[i].a;
-      idx1 = i;
-      break;
-    }
-  }
-  let idx2 = -1, t2 = null, a2 = null;
-  for (let i = idx1 > 0 ? idx1 : 1; i < accData.length; i++) {
-    let prev = accData[i-1], curr = accData[i];
-    if (Math.abs(curr.a) < stopThreshold) {
-      t2 = curr.relT;
-      a2 = curr.a;
-      idx2 = i;
-      break;
-    }
-    if (Math.sign(prev.a) !== Math.sign(curr.a)) {
-      t2 = prev.relT;
-      a2 = prev.a;
-      idx2 = i-1;
-      break;
-    }
-  }
-  if (t1 === null || t2 === null) {
-    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Triggerpunkte konnten nicht gefunden werden.'; }
-    return;
-  }
-  let tStart = Math.max(0, t1 - 1.0);
-  let tEnd = t2 + 1.0;
-  let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
-  let trigger1Point = accData[idx1];
-  let trigger2Point = accData[idx2];
-  if (!data.some(d => d === trigger1Point)) {
-    if (trigger1Point.relT < tStart) {
-      data.unshift(trigger1Point);
-    } else {
-      let insertIdx = data.findIndex(d => d.relT > trigger1Point.relT);
-      if (insertIdx === -1) data.push(trigger1Point);
-      else data.splice(insertIdx, 0, trigger1Point);
-    }
-  }
-  if (!data.some(d => d === trigger2Point)) {
-    if (trigger2Point.relT > tEnd) {
-      data.push(trigger2Point);
-    } else {
-      let insertIdx = data.findIndex(d => d.relT > trigger2Point.relT);
-      if (insertIdx === -1) data.push(trigger2Point);
-      else data.splice(insertIdx, 0, trigger2Point);
-    }
-  }
-  data.forEach(d => { delete d._trigger1; delete d._trigger2; });
-  trigger1Point._trigger1 = true;
-  trigger2Point._trigger2 = true;
-  if (data.length === 0) {
-    if (document.getElementById('result')) { document.getElementById('result').innerHTML = 'Keine Messdaten im Auswertebereich.'; }
-    return;
-  }
-  let t0 = data[0].relT;
-  let t_beg = t1 - tStart;
-  let t_end = t2 - tStart;
-  let plotData = data.map(d => {
-    let tNorm = d.relT - t0;
-    let obj = { t: tNorm, a: d.a };
-    if (d._trigger1) obj._trigger1 = true;
-    if (d._trigger2) obj._trigger2 = true;
-    return obj;
-  });
-  let idx_beg = plotData.findIndex(d => d._trigger1);
-  let idx_end = plotData.findIndex(d => d._trigger2);
-  if (idx_beg < 0) idx_beg = 0;
-  if (idx_end < 0) idx_end = plotData.length-1;
-  let brakeDataRaw = plotData.slice(idx_beg, idx_end+1);
-  function smoothCurve(arr, windowSize) {
-    let res = [];
-    for (let i = 0; i < arr.length; i++) {
-      if (i === 0 || i === arr.length-1) {
-        res.push(arr[i].a);
-      } else {
-        let from = Math.max(0, i - windowSize);
-        let to = Math.min(arr.length-1, i + windowSize);
-        let sum = 0, cnt = 0;
-        for (let j = from; j <= to; j++) {
-          sum += arr[j].a; cnt++;
-        }
-        res.push(sum / cnt);
-      }
-    }
-    return res;
-  }
-  let brakeDataSmooth = plotData.map((d, i) => {
-    if (i < idx_beg || i > idx_end) {
-      return { t: d.t, a: d.a, _trigger1: d._trigger1, _trigger2: d._trigger2 };
-    } else {
-      let arr = plotData.slice(idx_beg, idx_end+1);
-      let smoothA = smoothCurve(arr, 2)[i-idx_beg];
-      return { t: d.t, a: smoothA, _trigger1: d._trigger1, _trigger2: d._trigger2 };
-    }
-  });
-  function integrateBrake(data, startSpeed) {
-    let v = [startSpeed];
-    let s = 0;
-    for (let i = 1; i < data.length; i++) {
-      let dt = data[i].t - data[i-1].t;
-      if (dt < 0) dt = 0;
-      let aVal = Math.abs(data[i].a);
-      v[i] = v[i-1] - aVal * dt;
-      if (v[i] < 0) {
-        let frac = v[i-1] / (v[i-1] - v[i]);
-        let tZero = data[i-1].t + frac * (data[i].t - data[i-1].t);
-        s += (v[i-1] + 0) / 2 * (tZero - data[i-1].t);
-        return { s, v };
-      }
-      s += (v[i-1] + v[i]) / 2 * dt;
-    }
-    return { s, v };
-  }
-  let resRaw = integrateBrake(brakeDataRaw, v0);
-  let resSmooth = integrateBrake(brakeDataSmooth, v0);
-  let meanA = 0;
-  if (brakeDataSmooth.length > 1) {
-    let sum = 0, tSum = 0;
-    for (let i = 1; i < brakeDataSmooth.length; i++) {
-      let dt = brakeDataSmooth[i].t - brakeDataSmooth[i-1].t;
-      if (dt < 0) dt = 0;
-      sum += Math.abs(brakeDataSmooth[i].a) * dt;
-      tSum += dt;
-    }
-    meanA = tSum > 0 ? sum / tSum : 0;
-  }
-  let vergleichsweg = meanA > 0 ? (Math.pow(v0,2)/(2*meanA)) : 0;
-  let brakeTime = (t_end - t_beg);
-  let time = brakeTime.toFixed(2);
-  if (document.getElementById('result')) {
-    document.getElementById('result').innerHTML =
-      `<b>Debug-Auswertung beendet!</b><br>Benötigte Zeit: ${time} s<br>Startgeschwindigkeit: ${v0.toFixed(2)} m/s` +
-      `<br>Mittlere Verzögerung: ${meanA.toFixed(2)} m/s²` +
-      `<br><span style='color:#888;'>Vergleichsbremsweg (konstant): ${vergleichsweg.toFixed(2)} m</span>` +
-      `<br><span style='color:#888;'>Bremsweg (ungeglättet): ${resRaw.s.toFixed(2)} m</span>` +
-      `<br><span style='color:#888;'>Bremsweg (geglättet): ${resSmooth.s.toFixed(2)} m</span>` +
-      `<div style='margin-top:1em;'><b>Ungeglättet:</b></div>`;
-  }
-  let canvasRaw = document.createElement('canvas');
-  canvasRaw.width = 320;
-  canvasRaw.height = 140;
-  showAccPlot(plotData, false, {
-    tThreshStart: t_beg,
-    tThreshEnd: t_end
-  }, canvasRaw);
-  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasRaw); }
-  if (document.getElementById('result')) {
-    document.getElementById('result').innerHTML += `<div style='margin-top:1em;'><b>Geglättet:</b></div>`;
-  }
-  let canvasSmooth = document.createElement('canvas');
-  canvasSmooth.width = 320;
-  canvasSmooth.height = 140;
-  showAccPlot(brakeDataSmooth, false, {
-    tThreshStart: brakeDataSmooth.find(d=>d._trigger1)?.t ?? brakeDataSmooth[0].t,
-    tThreshEnd: brakeDataSmooth.find(d=>d._trigger2)?.t ?? brakeDataSmooth[brakeDataSmooth.length-1].t
-  }, canvasSmooth);
-  if (document.getElementById('result')) { document.getElementById('result').appendChild(canvasSmooth); }
-  if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Debug-Auswertung abgeschlossen.'; }
+  window.debugV0Override = v0;
+  processMeasurement();
 }
-// --- DEBUG: Testfunktion für synthetische Sinus-Messung ---
-function debugTestSinusMessung() {
-  let v0 = 1.0; // m/s
-  let peakA = 5.0; // m/s²
-  let period = 1.0; // s
-  let dt = 0.02; // 50 Hz
-  let tMax = 2.0; // 2s
-  let decelThreshold = 2.0;
-  let stopThreshold = 0.3;
-  let accData = [];
-  for (let t = 0; t <= tMax; t += dt) {
-    let a = peakA * Math.sin(2 * Math.PI * t / period);
-    accData.push({ t: t*1000, relT: t, a: a });
-  }
-  let idx1 = -1, t1 = null, a1 = null;
-  for (let i = 0; i < accData.length; i++) {
-    if (Math.abs(accData[i].a) >= decelThreshold) {
-      t1 = accData[i].relT;
-      a1 = accData[i].a;
-      idx1 = i;
-      break;
-    }
-  }
-  let idx2 = -1, t2 = null, a2 = null;
-  for (let i = idx1 > 0 ? idx1 : 1; i < accData.length; i++) {
-    let prev = accData[i-1], curr = accData[i];
-    if (Math.abs(curr.a) < stopThreshold) {
-      t2 = curr.relT;
-      a2 = curr.a;
-      idx2 = i;
-      break;
-    }
-    if (Math.sign(prev.a) !== Math.sign(curr.a)) {
-      t2 = prev.relT;
-      a2 = prev.a;
-      idx2 = i-1;
-      break;
-    }
-  }
-  let tStart = Math.max(0, t1 - 1.0);
-  let tEnd = t2 + 1.0;
-  let data = accData.filter(d => d.relT >= tStart && d.relT <= tEnd);
-  let trigger1Point = accData[idx1];
-  let trigger2Point = accData[idx2];
-  if (!data.some(d => d === trigger1Point)) {
-    if (trigger1Point.relT < tStart) {
-      data.unshift(trigger1Point);
-    } else {
-      let insertIdx = data.findIndex(d => d.relT > trigger1Point.relT);
-      if (insertIdx === -1) data.push(trigger1Point);
-      else data.splice(insertIdx, 0, trigger1Point);
-    }
-  }
-  if (!data.some(d => d === trigger2Point)) {
-    if (trigger2Point.relT > tEnd) {
-      data.push(trigger2Point);
-    } else {
-      let insertIdx = data.findIndex(d => d.relT > trigger2Point.relT);
-      if (insertIdx === -1) data.push(trigger2Point);
-      else data.splice(insertIdx, 0, trigger2Point);
-    }
-  }
-  data.forEach(d => { delete d._trigger1; delete d._trigger2; });
-  trigger1Point._trigger1 = true;
-  trigger2Point._trigger2 = true;
-  let t0 = data[0].relT;
-  let plotData = data.map(d => {
-    let tNorm = d.relT - t0;
-    let obj = { t: tNorm, a: d.a };
-    if (d._trigger1) obj._trigger1 = true;
-    if (d._trigger2) obj._trigger2 = true;
-    return obj;
-  });
-  showAccPlot(plotData, false, {
-    tThreshStart: t1 - tStart,
-    tThreshEnd: t2 - tStart
-  });
-}
-document.getElementById('debugSinusBtn').onclick = debugTestSinusMessung;
+
+
 let accBuffer = [];
 let accData = [];
 let trigger1Reached = false;
@@ -862,7 +621,7 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
   ctx.font = '12px Segoe UI';
   ctx.textAlign = 'center';
   // X-Achse
-  ctx.fillText('Zeit (s)', w/2, h-4);
+  ctx.fillText('Zeit (s)', w-pad, h-4);
   // Y-Achse: ganz links oben an der Achse, horizontal
   ctx.textAlign = 'left';
   ctx.fillText('a (m/s²)', pad-32, pad-8);
@@ -998,23 +757,13 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
       ctx.arc(x, y, graphLineWidth*2, 0, 2*Math.PI);
       ctx.fillStyle = '#27ae60'; // kräftiges grün
       ctx.fill();
-      // Vertikale gepunktete Linie
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-     
-      ctx.strokeStyle = '#e84118'; // rot wie Auswertebereich
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, h-pad+18);
-      ctx.stroke();
-           ctx.setLineDash([]);
-      ctx.restore();
-      // Zeitwert unter Achse
+      // Zeitwert 3x Texthöhe unterhalb des Punktes
       ctx.save();
       ctx.font = 'bold 13px Segoe UI';
-      ctx.fillStyle = '#e84118';
-      ctx.textAlign = 'center';
-      ctx.fillText(d.t.toFixed(2) + 's', x, h-pad+32);
+      ctx.fillStyle = '#27ae60';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillText(d.t.toFixed(2) + 's', x - 10, y + 2 * 13);
       ctx.restore();
     }
   }
@@ -1030,22 +779,13 @@ function showAccPlot(data, returnPNG=false, opts={}, canvasOverride) {
       ctx.arc(x, y, graphLineWidth*2, 0, 2*Math.PI);
       ctx.fillStyle = '#0097e6'; // kräftiges blau
       ctx.fill();
-      // Vertikale gepunktete Linie
-      ctx.save();
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = '#0097e6';
-      ctx.beginPath();
-      ctx.moveTo(x, y);
-      ctx.lineTo(x, h-pad+18);
-      ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.restore();
-      // Zeitwert unter Achse
+      // Zeitwert 3x Texthöhe oberhalb des Punktes
       ctx.save();
       ctx.font = 'bold 13px Segoe UI';
       ctx.fillStyle = '#0097e6';
-      ctx.textAlign = 'center';
-      ctx.fillText(d.t.toFixed(2) + 's', x, h-pad+32);
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'bottom';
+      ctx.fillText(d.t.toFixed(2) + 's', x + 10, y - 2 * 13);
       ctx.restore();
     }
   }
