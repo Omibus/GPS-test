@@ -12,8 +12,8 @@
     input, select { width: 100%; padding: 0.5rem; margin: 0; border-radius: 0.5rem; border: 1px solid #ccc; box-sizing: border-box; height: 2.5em; }
     button { margin-top: 1.5rem; width: 100%; padding: 1rem; border: none; border-radius: 0.5rem; background: #4cd137; color: #fff; font-size: 1.2rem; cursor: pointer; box-sizing: border-box; }
     .inline-btn, .inline-btn-clear {
-      width: calc(2.5em + 2px); /* exakt wie input inkl. border */
-      height: calc(2.5em + 2px);
+      width: calc(1.5em + 2px); /* exakt wie input inkl. border */
+      height: calc(1.5em + 2px);
       padding: 0;
       margin: 0;
       display: inline-flex;
@@ -26,7 +26,7 @@
       color: #222;
       box-sizing: border-box;
     }
-    .inline-btn-clear { color:#e84118; font-size:1.3em; }
+    .inline-btn-clear { color:#e84118; font-size:1.5em; }
     .inline-btn:active, .inline-btn-clear:active { background:#ddd; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
     .flex-row { display:flex; align-items:center; gap:0.5em; margin-top:0.5em; }
@@ -45,25 +45,13 @@
       <button id="calibBtn" type="button" style="background:#fbc531;color:#222;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. grav.</button>
       <button id="calibBreakBtn" type="button" style="background:#00a8ff;color:#fff;padding:0.5em 1em;border:none;border-radius:0.5em;">calib. break</button>
     </div>
-  <!-- Debug-Bereich für Rohdatensatz-Injektion -->
-  <div class="result" style="margin-top:2em;">
-    <b>Debug: Rohdatensatz aus Datei auswerten</b><br>
-    <label for="debugRohDropdown">Rohdatensatz:</label>
-    <select id="debugRohDropdown" style="margin-right:1em;">
-      <option value="1">Rohdatensatz 1</option>
-      <option value="2" selected>Rohdatensatz 2</option>
-      <option value="3">Rohdatensatz 3</option>
-    </select>
-    <label for="debugV0Input">Anfangsgeschwindigkeit (m/s):</label>
-    <input type="number" id="debugV0Input" value="3" min="0" step="0.1" style="width:5em;margin-right:1em;">
-    <button id="debugRohBtn" style="background:#e1b12c;">Debug: Rohdaten auswerten</button>
-  </div>
-    <div class="flex-row"><span>Schwellenwert Verzögerung (m/s²):</span>
+
+    <div class="flex-row"><span>Schwelle Beginn Brems (m/s²):</span>
       <button id="decelLeft" type="button" class="inline-btn">-</button>
       <input type="number" id="decelThreshold" value="2" min="0" step="0.1" style="flex:1;min-width:60px;">
       <button id="decelRight" type="button" class="inline-btn">+</button>
     </div>
-    <div class="flex-row"><span>Schwellenwert Stillstand (m/s²):</span>
+    <div class="flex-row"><span>Schwelle Stillstand (m/s²):</span>
       <button id="stopLeft" type="button" class="inline-btn">-</button>
       <input type="number" id="stopThreshold" value="0.3" min="0" step="0.01" style="flex:1;min-width:60px;">
       <button id="stopRight" type="button" class="inline-btn">+</button>
@@ -88,10 +76,10 @@
       <input type="number" id="winkelZ" value="0" min="-180" max="180" step="0.1" style="flex:1;">
       <button id="clearWinkelZ" type="button" class="inline-btn-clear">&#10006;</button>
     </div>
-    <label style="margin-top:0.5rem;display:block;">
-      <input type="checkbox" id="gravityToggle">
-      Mit Gravitation messen
-    </label>
+    <div class="flex-row" style="margin-top:0.5rem;">
+      <input type="checkbox" id="gravityToggle" style="width:auto;">
+      <span>Mit Gravitation messen</span>
+    </div>
     <button id="startBtn">Messung starten</button>
     <button id="stopBtn" style="background:#e84118;margin-top:0.5rem;">Messung beenden</button>
     <button id="clearBtn" style="background:#888;margin-top:0.5rem;">Clear</button>
@@ -99,7 +87,20 @@
     <div class="status" id="status"></div>
     <div class="result" id="resultsList"></div>
     <button id="exportBtn" style="background:#0097e6;margin-top:1.5rem;">Export als Excel</button>
+      <div class="result" style="margin-top:2em;">
+    <b>Debug: Rohdatensatz aus Datei auswerten</b><br>
+    <label for="debugRohDropdown">Rohdatensatz:</label>
+    <select id="debugRohDropdown" style="margin-right:1em;">
+      <option value="1">Rohdatensatz 1</option>
+      <option value="2" selected>Rohdatensatz 2</option>
+      <option value="3">Rohdatensatz 3</option>
+    </select>
+    <label for="debugV0Input">Anfangsgeschwindigkeit (m/s):</label>
+    <input type="number" id="debugV0Input" value="3" min="0" step="0.1" style="width:5em;margin-right:1em;">
+    <button id="debugRohBtn" style="background:#e1b12c;">Debug: Rohdaten auswerten</button>
   </div>
+  </div>
+  
   <script>
 // --- Rohdatensätze als JS-Arrays ---
 const debugRohdaten = {
