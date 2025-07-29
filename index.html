@@ -243,7 +243,7 @@ function updateResultsList() {
     listDiv.innerHTML = '';
     return;
   }
-  let html = '<b>Messungen:</b>';
+  let html = '<b>Messungen:</b><div style="margin-bottom:0.8em;"></div>';
   results.forEach((r, i) => {
     // Nummerierung: älteste Messung = 1, neueste = results.length
     const messungsNummer = results.length - i;
@@ -255,13 +255,13 @@ function updateResultsList() {
       r.timestamp = `${datum}; ${uhrzeit} Uhr`;
     }
     html += `<div style='margin-bottom:1.5em;padding:0.5em;background:#f8f8f8;border-radius:0.5em;'>`;
-    html += `<b>Messung ${messungsNummer} (${r.timestamp})</b><br>`;
+    html += `<b>Messung ${messungsNummer} (${r.timestamp})<div style="margin-bottom:0.35em;"></div></b>`;
     html += `Zeit: ${r.time}s<br>`;
     html += `Startgeschw.: ${r.startSpeed}m/s<br>`;
     html += `Mittlere Verzögerung: ${r.meanA} m/s²<br>`;
-    html += `Bremsweg 1 (Integ. a_geglättet): ${r.distance}m<br>`;
-    html += `v1_rest: ${r.vEnd} m/s<br>`;
-    html += `Bremsweg 2 (a_normiert): ${r.normBremsweg}m<br>`;
+    html += `Bremsweg 1 (Integ. a_geglättet): <b>${r.distance}m</b><br>`;
+    html += `<span style='color:#888;'>v1_rest: ${r.vEnd} m/s</span><br>`;
+    html += `Bremsweg 2 (a_normiert): <b>${r.normBremsweg}m</b><br>`;
     html += `<span style='color:#888;'>skal_Bremsweg 2: ${r.skalNorm}</span><br>`;
     html += `<span style='color:#888;'>Vergleichsbremsweg (a konst.): ${r.vergleichsweg} m</span><br>`;
     html += `<br>`;
@@ -526,8 +526,8 @@ function processMeasurement() {
     for (let i = 1; i < data.length; i++) {
       let dt = data[i].t - data[i-1].t;
       if (dt < 0) dt = 0; // Sicherheit
-      let aVal = Math.abs(data[i].a);
-      v[i] = v[i-1] - aVal * dt;
+      let aVal = Math.abs(data[i].a); // Immer Betrag verwenden (als Verzögerung)
+      v[i] = v[i-1] - aVal * dt; // Geschwindigkeit reduzieren
       s += (v[i-1] + v[i]) / 2 * dt;
     }
     return { s, v };
@@ -550,17 +550,18 @@ function processMeasurement() {
 
   // Ungeglättet
   let resRaw = integrateBrake(brakeDataRaw, v0);
-  // Geglättet
-  let resSmooth = integrateBrake(brakeDataSmooth, v0);
+  // Geglättet - nur der Bremsbereich zwischen den Triggerpunkten
+  let resSmooth = integrateBrake(brakeDataSmooth.slice(idx_beg, idx_end+1), v0);
 
-  // Mittelwert der Verzögerung (im Intervall)
+  // Mittelwert der Verzögerung (nur zwischen Triggerpunkten)
   let meanA = 0;
-  if (brakeDataSmooth.length > 1) {
+  let brakeSectionForMean = brakeDataSmooth.slice(idx_beg, idx_end+1);
+  if (brakeSectionForMean.length > 1) {
     let sum = 0, tSum = 0;
-    for (let i = 1; i < brakeDataSmooth.length; i++) {
-      let dt = brakeDataSmooth[i].t - brakeDataSmooth[i-1].t;
+    for (let i = 1; i < brakeSectionForMean.length; i++) {
+      let dt = brakeSectionForMean[i].t - brakeSectionForMean[i-1].t;
       if (dt < 0) dt = 0;
-      sum += Math.abs(brakeDataSmooth[i].a) * dt;
+      sum += Math.abs(brakeSectionForMean[i].a) * dt;
       tSum += dt;
     }
     meanA = tSum > 0 ? sum / tSum : 0;
@@ -570,22 +571,28 @@ function processMeasurement() {
   // --- Normierte geglättete Kurve und Bremsweg 2 ---
   // Nur Bremsbereich (zwischen Triggerpunkten)
   let brakeSmoothSection = brakeDataSmooth.slice(idx_beg, idx_end+1);
-  let dtArr = [];
+  // 1. Normiere die geglättete Kurve (nur Bremsbereich) - verwende Beträge für Integration
+  let accNorm = brakeSmoothSection.map(d => d.a);
+  // 2. Bestimme k so, dass Integral(k * |accNorm|) * dt = v0 (verwende Beträge)
+  let sumNormAcc = 0;
   for (let i = 1; i < brakeSmoothSection.length; i++) {
-    dtArr.push(brakeSmoothSection[i].t - brakeSmoothSection[i-1].t);
+    let dt = brakeSmoothSection[i].t - brakeSmoothSection[i-1].t;
+    if (dt < 0) dt = 0;
+    sumNormAcc += Math.abs(accNorm[i]) * dt; // Betrag für Skalierungsfaktor
   }
-  // Finde Skalierungsfaktor k, sodass v0 - k*Integral(a_glatt*dt) = 0
-  let integralA = 0;
-  for (let i = 1; i < brakeSmoothSection.length; i++) {
-    integralA += brakeSmoothSection[i].a * dtArr[i-1];
-  }
-  let k = (integralA !== 0) ? (v0 / integralA) : 1;
-  // Skaliere die geglättete Kurve
+  let k = sumNormAcc !== 0 ? v0 / sumNormAcc : 1;
+  // Skaliere die geglättete Kurve für Plot und Historie - Vorzeichen beibehalten
   let normCurve = brakeDataSmooth.map((d, i) => {
-    let aNorm = (i >= idx_beg && i <= idx_end) ? d.a * k : d.a;
+    let aNorm;
+    if (i >= idx_beg && i <= idx_end) {
+      // Skaliere den Betrag, aber behalte das ursprüngliche Vorzeichen bei
+      aNorm = Math.sign(d.a) * Math.abs(d.a) * k;
+    } else {
+      aNorm = d.a;
+    }
     return { t: d.t, a: aNorm, _trigger1: d._trigger1, _trigger2: d._trigger2 };
   });
-  // Bremsweg mit normierter Kurve berechnen
+  // Bremsweg 2 exakt wie Bremsweg 1 berechnen, aber mit skaliert geglätteter Kurve
   let resNorm = integrateBrake(normCurve.slice(idx_beg, idx_end+1), v0);
 
   // Ausgabe
@@ -872,9 +879,9 @@ document.getElementById('exportBtn').onclick = function() {
   loadSheetJS(function() {
     let wb = XLSX.utils.book_new();
     // Haupttabelle mit Messwerten
-    let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)','Bremsweg (normierte Kurve)']];
+    let ws_data = [['Nr','Zeit (s)','Startgeschw. (m/s)','Bremsweg (m)','Vergleichsbremsweg (m)','Mittlere Verzögerung (m/s²)','Bremsweg (normierte Kurve)','Skalierter Normierter Bremsweg']];
     results.forEach((r,i)=>{
-      ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA, r.normBremsweg]);
+      ws_data.push([i+1, r.time, r.startSpeed, r.distance, r.vergleichsweg, r.meanA, r.normBremsweg, r.skalNorm]);
     });
     let ws = XLSX.utils.aoa_to_sheet(ws_data);
     XLSX.utils.book_append_sheet(wb, ws, 'Messungen');
@@ -908,6 +915,20 @@ document.getElementById('exportBtn').onclick = function() {
         });
         let smoothSheet = XLSX.utils.aoa_to_sheet(smoothData);
         XLSX.utils.book_append_sheet(wb, smoothSheet, `Geglättet${i+1}`);
+      }
+      // Normierte und skalierte Kurvenwerte
+      if (results[i] && results[i].normCurve) {
+        let normData = [['Zeit (s)','Verzögerung skaliert (m/s²)','Trigger1','Trigger2']];
+        results[i].normCurve.forEach(d=>{
+          normData.push([
+            typeof d.t === 'number' ? d.t.toFixed(3) : '',
+            typeof d.a === 'number' ? d.a.toFixed(3) : '',
+            d._trigger1 ? 'X' : '',
+            d._trigger2 ? 'X' : ''
+          ]);
+        });
+        let normSheet = XLSX.utils.aoa_to_sheet(normData);
+        XLSX.utils.book_append_sheet(wb, normSheet, `Normiert${i+1}`);
       }
     });
     XLSX.writeFile(wb, 'bremsweg_messungen.xlsx');
