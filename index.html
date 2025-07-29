@@ -260,6 +260,7 @@ function updateResultsList() {
     html += `Startgeschw.: ${r.startSpeed}m/s<br>`;
     html += `Mittlere Verzögerung: ${r.meanA} m/s²<br>`;
     html += `Bremsweg 1 (Integ. a_geglättet): <b>${r.distance}m</b><br>`;
+    html += `a1_max: <b>${r.maxA} m/s²</b><br>`;
     html += `<span style='color:#888;'>v1_rest: ${r.vEnd} m/s</span><br>`;
     html += `Bremsweg 2 (a_normiert): <b>${r.normBremsweg}m</b><br>`;
     html += `<span style='color:#888;'>skal_Bremsweg 2: ${r.skalNorm}</span><br>`;
@@ -634,6 +635,10 @@ function processMeasurement() {
 
   if (document.getElementById('status')) { document.getElementById('status').innerHTML = 'Stillstand erkannt.'; }
 
+  // Maximalwert der geglätteten Beschleunigungskurve zwischen Triggerpunkten
+  let brakeSectionForMax = brakeDataSmooth.slice(idx_beg, idx_end+1);
+  let maxA = brakeSectionForMax.length > 0 ? Math.max(...brakeSectionForMax.map(d => Math.abs(d.a))) : 0;
+
   // Für Historie beide Kurven speichern
   // Ergebnisse in die Historie einfügen (neueste zuerst)
   plotPNGs.unshift(canvasRaw.toDataURL('image/png'));
@@ -644,6 +649,7 @@ results.unshift({
   distance: resSmooth.s.toFixed(2),
   vergleichsweg: vergleichsweg.toFixed(2),
   meanA: meanA.toFixed(2),
+  maxA: maxA.toFixed(2),
   vEnd: (resSmooth.v && resSmooth.v.length > 0 && typeof resSmooth.v[resSmooth.v.length-1] === 'number') ? resSmooth.v[resSmooth.v.length-1].toFixed(2) : '0.00',
   normBremsweg: resNorm.s.toFixed(2),
   normCurve: normCurve,
