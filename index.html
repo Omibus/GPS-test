@@ -472,7 +472,7 @@ window.addEventListener('devicemotion', function(event) {
       aM = vecM[dirM] || 0;
     }
     let relTime = (now - startTime) / 1000;
-    accData.push({t: now, relT: relTime, a: aM});
+    accData.push({t: now, relT: relTime, a: aM, gpsSpeed: gpsSpeed});
 
     // Trigger 1 prüfen (erstes Überschreiten decelThreshold)
     if (!trigger1Reached && Math.abs(aM) >= decelThreshold) {
