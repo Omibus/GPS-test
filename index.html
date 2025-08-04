@@ -429,6 +429,33 @@ function showSpeedPlot(data, canvas) {
     ctx.lineTo(x1, y1p);
   }
   ctx.stroke();
+
+  // --- Grünen Punkt für Startgeschwindigkeit einzeichnen ---
+  // Finde den Messpunkt, der zeitlich am nächsten zu 0,5s vor dem ersten Triggerpunkt liegt
+  let idxTrigger1 = data.findIndex(d => d._trigger1);
+  let tTrigger1 = idxTrigger1 >= 0 ? data[idxTrigger1].t : tStart;
+  let tV0Target = tTrigger1 - 0.5;
+  // Finde den Messpunkt mit minimalem Abstand zu tV0Target
+  let idxV0 = 0;
+  let minDt = Infinity;
+  for (let i = 0; i < data.length; i++) {
+    let dt = Math.abs(data[i].t - tV0Target);
+    if (dt < minDt) {
+      minDt = dt;
+      idxV0 = i;
+    }
+  }
+  let tV0 = data[idxV0].t;
+  let vV0 = data[idxV0].v;
+  let xV0 = pad + (w-2*pad) * ((tV0-tStart)/(tEnd-tStart));
+  let yV0 = h-pad - (h-2*pad) * ((vV0-vmin)/(vmax-vmin));
+  ctx.beginPath();
+  ctx.arc(xV0, yV0, 7, 0, 2*Math.PI);
+  ctx.fillStyle = '#27ae60';
+  ctx.strokeStyle = '#145a32';
+  ctx.lineWidth = 2;
+  ctx.fill();
+  ctx.stroke();
 }
 window.addEventListener('devicemotion', function(event) {
   // --- Immer aktuellen Beschleunigungswert berechnen und anzeigen ---
