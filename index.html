@@ -674,10 +674,22 @@ function processMeasurement() {
   // Startgeschwindigkeit: Integration rückwärts bis t_beg
   let v0;
   let speedCurveLocal;
+  let actualV0Time = 0; // Variable für alle Fälle definieren
+  let idx_v0 = 0;
+  
   if (typeof window.debugV0Override === 'number' && accData._debugSpeedCurve) {
     v0 = window.debugV0Override;
     setTimeout(()=>{window.debugV0Override=undefined;},0);
     speedCurveLocal = accData._debugSpeedCurve;
+    // Für Debug-Modus: v0-Zeit 0.5s vor erstem Triggerpunkt berechnen
+    let t_v0 = plotData[idx_beg].t - 0.5;
+    actualV0Time = t_v0;
+    for (let i = 0; i < speedCurveLocal.length; i++) {
+      if (speedCurveLocal[i].t <= t_v0) {
+        idx_v0 = i;
+        actualV0Time = speedCurveLocal[i].t;
+      }
+    }
   } else {
     // Kombiniere speedBuffer (Vorlauf) und accData (Messdaten) für den Auswertebereich
     let tStart = plotData[0].t;
