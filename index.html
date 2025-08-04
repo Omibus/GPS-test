@@ -380,19 +380,19 @@ function showSpeedPlot(data, canvas) {
   let tStart = data[0].t;
   let tEnd = data[data.length-1].t;
   // Wertebereich bestimmen
-  let vmin = Math.min(...data.map(d=>d.v));
+  let vmin = 0;
   let vmax = Math.max(...data.map(d=>d.v));
-  if (vmin === vmax) { vmin -= 1; vmax += 1; }
-  // y=0 (v=0) bestimmen
-  let y0 = h-pad - (h-2*pad) * ((0-vmin)/(vmax-vmin));
+  if (vmax === vmin) { vmax += 1; }
+  // y=0 (v=0) immer unten
+  let y0 = h-pad;
   // --- Achsen zeichnen ---
   ctx.strokeStyle = '#888';
   ctx.lineWidth = 1.2;
   ctx.beginPath();
-  // x-Achse (v=0)
+  // x-Achse (v=0) immer unten
   ctx.moveTo(pad, y0);
   ctx.lineTo(w-pad, y0);
-  // y-Achse
+  // y-Achse immer links
   ctx.moveTo(pad, h-pad);
   ctx.lineTo(pad, pad);
   ctx.stroke();
