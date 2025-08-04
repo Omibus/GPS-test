@@ -240,10 +240,17 @@ document.getElementById('startBtn').onclick = function() {
   measuringUseGravity = useGravity; // Für diese Messung merken
   let now = performance.now();
   startTime = now;
+  // Forward-Fill für gpsSpeed im accBuffer
+  let lastSpeed = 0;
+  let accBufferFF = accBuffer.map(d => {
+    let v = (typeof d.gpsSpeed === 'number' && !isNaN(d.gpsSpeed)) ? d.gpsSpeed : lastSpeed;
+    lastSpeed = v;
+    return { ...d, gpsSpeed: v };
+  });
   // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
-  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a, gpsSpeed: d.gpsSpeed }));
+  accData = accBufferFF.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a, gpsSpeed: d.gpsSpeed }));
   // speedBuffer: Puffer für Geschwindigkeit (1s Vorlauf)
-  window.speedBuffer = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, v: typeof d.gpsSpeed === 'number' ? d.gpsSpeed : 0 }));
+  window.speedBuffer = accBufferFF.map(d => ({ t: d.t, relT: (d.t - now) / 1000, v: d.gpsSpeed }));
   trigger1Reached = false;
   trigger2Reached = false;
   postStopTimeout = null;
