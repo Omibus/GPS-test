@@ -666,10 +666,10 @@ function processMeasurement() {
     let combined = [];
     // speedBuffer: alle Werte mit relT >= tStart und <= tEnd
     if (window.speedBuffer && Array.isArray(window.speedBuffer)) {
-      combined = window.speedBuffer.filter(d => d.relT >= tStart && d.relT <= tEnd);
+      combined = window.speedBuffer.filter(d => d.relT >= tStart && d.relT <= tEnd).map(d => ({ t: d.relT, v: d.v }));
     }
     // accData: alle Werte mit relT >= tStart und <= tEnd
-    combined = combined.concat(accData.filter(d => d.relT >= tStart && d.relT <= tEnd).map(d => ({ t: d.relT, v: typeof d.gpsSpeed === 'number' ? d.gpsSpeed : 0 })));
+    combined = combined.concat(accData.filter(d => d.relT >= tStart && d.relT <= tEnd).map(d => ({ t: d.relT, v: d.gpsSpeed })));
     // Sortiere nach Zeit
     combined.sort((a,b)=>a.t-b.t);
     // Entferne Duplikate (gleiche t)
