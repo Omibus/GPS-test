@@ -354,10 +354,12 @@ function updateResultsList() {
         imgDiv.appendChild(canvasNorm);
       }
       // Geschwindigkeit über Zeit plotten
-      if (results[i].speedCurve && Array.isArray(results[i].speedCurve) && results[i].speedCurve.length > 1) {
+      if (results[i].speedCurve && Array.isArray(results[i].speedCurve) && results[i].speedCurve.length > 1 && typeof results[i].v0Idx === 'number') {
         let canvasSpeed = document.createElement('canvas');
         canvasSpeed.width = 320;
         canvasSpeed.height = 140;
+        canvasSpeed.v0Idx = results[i].v0Idx; // Index des Startgeschwindigkeitspunktes übergeben
+        canvasSpeed.v0Time = results[i].v0Time; // Tatsächliche Zeit des v0-Punktes übergeben
         showSpeedPlot(results[i].speedCurve, canvasSpeed);
         let labelSpeed = document.createElement('div');
         labelSpeed.innerHTML = '<b>Geschwindigkeit</b>';
@@ -430,32 +432,26 @@ function showSpeedPlot(data, canvas) {
   }
   ctx.stroke();
 
-  // --- Grünen Punkt für Startgeschwindigkeit einzeichnen ---
-  // Finde den Messpunkt, der zeitlich am nächsten zu 0,5s vor dem ersten Triggerpunkt liegt
-  let idxTrigger1 = data.findIndex(d => d._trigger1);
-  let tTrigger1 = idxTrigger1 >= 0 ? data[idxTrigger1].t : tStart;
-  let tV0Target = tTrigger1 - 0.5;
-  // Finde den Messpunkt mit minimalem Abstand zu tV0Target
-  let idxV0 = 0;
-  let minDt = Infinity;
-  for (let i = 0; i < data.length; i++) {
-    let dt = Math.abs(data[i].t - tV0Target);
-    if (dt < minDt) {
-      minDt = dt;
-      idxV0 = i;
-    }
+  // --- Grünen Punkt und Zeit für Startgeschwindigkeit einzeichnen ---
+  if (typeof canvas.v0Idx === 'number' && data[canvas.v0Idx] && typeof canvas.v0Time === 'number') {
+    let tV0 = canvas.v0Time; // Verwende die tatsächliche Zeit des v0-Punktes
+    let vV0 = data[canvas.v0Idx].v;
+    let xV0 = pad + (w-2*pad) * ((tV0-tStart)/(tEnd-tStart));
+    let yV0 = h-pad - (h-2*pad) * ((vV0-vmin)/(vmax-vmin));
+    // Punkt
+    ctx.beginPath();
+    ctx.arc(xV0, yV0, 6, 0, 2*Math.PI);
+    ctx.fillStyle = '#27ae60';
+    ctx.strokeStyle = '#145a32';
+    ctx.lineWidth = 2;
+    ctx.fill();
+    ctx.stroke();
+    // Zeit als Text
+    ctx.font = 'bold 13px Segoe UI';
+    ctx.fillStyle = '#27ae60';
+    ctx.textAlign = 'center';
+    ctx.fillText(tV0.toFixed(2)+'s', xV0, h-pad+28);
   }
-  let tV0 = data[idxV0].t;
-  let vV0 = data[idxV0].v;
-  let xV0 = pad + (w-2*pad) * ((tV0-tStart)/(tEnd-tStart));
-  let yV0 = h-pad - (h-2*pad) * ((vV0-vmin)/(vmax-vmin));
-  ctx.beginPath();
-  ctx.arc(xV0, yV0, 7, 0, 2*Math.PI);
-  ctx.fillStyle = '#27ae60';
-  ctx.strokeStyle = '#145a32';
-  ctx.lineWidth = 2;
-  ctx.fill();
-  ctx.stroke();
 }
 window.addEventListener('devicemotion', function(event) {
   // --- Immer aktuellen Beschleunigungswert berechnen und anzeigen ---
@@ -708,9 +704,11 @@ function processMeasurement() {
     // Wert 0,5s vor Triggerpunkt 1 suchen
     let t_v0 = plotData[idx_beg].t - 0.5;
     let idx_v0 = 0;
+    let actualV0Time = t_v0; // Die tatsächliche Zeit für v0 merken
     for (let i = 0; i < speedCurveLocal.length; i++) {
       if (speedCurveLocal[i].t <= t_v0) {
         idx_v0 = i;
+        actualV0Time = speedCurveLocal[i].t; // Die echte Zeit des gefundenen Punktes
       }
     }
     v0 = speedCurveLocal[idx_v0].v;
@@ -821,7 +819,9 @@ results.unshift({
   normBremsweg: resNorm.s.toFixed(2),
   normCurve: normCurve,
   skalNorm: k.toFixed(3),
-  speedCurve: speedCurveLocal
+  speedCurve: speedCurveLocal,
+  v0Idx: typeof idx_v0 === 'number' ? idx_v0 : 0,
+  v0Time: typeof actualV0Time === 'number' ? actualV0Time : (speedCurveLocal.length > 0 ? speedCurveLocal[0].t : 0)
 });
   updateResultsList();
 }
