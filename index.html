@@ -135,6 +135,32 @@ document.getElementById('debugRohBtn').onclick = function() {
   }
   // accData wie bei Messung starten befüllen
   accData = rohdaten.map(([t,a]) => ({ t: t*1000, relT: t, a: a }));
+  // Triggerpunkte suchen
+  let idx1 = -1, idx2 = -1;
+  for (let i = 0; i < accData.length; i++) {
+    if (Math.abs(accData[i].a) >= decelThreshold && idx1 === -1) idx1 = i;
+    if (idx1 !== -1 && (Math.abs(accData[i].a) < stopThreshold || (i > 0 && Math.sign(accData[i-1].a) !== Math.sign(accData[i].a)))) {
+      idx2 = i;
+      break;
+    }
+  }
+  if (idx1 === -1) idx1 = 0;
+  if (idx2 === -1) idx2 = accData.length-1;
+  // Geschwindigkeit künstlich erzeugen
+  accData = accData.map((d, i) => {
+    let gpsSpeed;
+    if (i < idx1) {
+      gpsSpeed = v0;
+    } else if (i >= idx1 && i <= idx2) {
+      let frac = (i-idx1)/(idx2-idx1);
+      gpsSpeed = v0 * (1-frac);
+    } else {
+      gpsSpeed = 0;
+    }
+    return { ...d, gpsSpeed };
+  });
+  // speedCurve für Debug-Modus erzeugen
+  window.speedCurve = accData.map(d => ({ t: d.relT, v: d.gpsSpeed }));
   // Trigger- und Statusvariablen zurücksetzen
   trigger1Reached = false;
   trigger2Reached = false;
@@ -143,6 +169,11 @@ document.getElementById('debugRohBtn').onclick = function() {
   measuring = false;
   // Anfangsgeschwindigkeit für die Auswertung setzen
   window.debugV0Override = v0;
+  // Falls keine Triggerpunkte gefunden wurden, abbrechen
+  if (accData.length === 0 || idx1 >= accData.length || idx2 >= accData.length) {
+    alert('Triggerpunkte konnten im Debug-Datensatz nicht gefunden werden.');
+    return;
+  }
   // Hauptfunktion aufrufen
   processMeasurement();
 };
@@ -210,7 +241,7 @@ document.getElementById('startBtn').onclick = function() {
   let now = performance.now();
   startTime = now;
   // accData: Puffer übernehmen, relT auf 0 setzen (relativ zum Messbeginn)
-  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a }));
+  accData = accBuffer.map(d => ({ t: d.t, relT: (d.t - now) / 1000, a: d.a, gpsSpeed: d.gpsSpeed }));
   trigger1Reached = false;
   trigger2Reached = false;
   postStopTimeout = null;
@@ -313,11 +344,83 @@ function updateResultsList() {
         imgDiv.appendChild(labelNorm);
         imgDiv.appendChild(canvasNorm);
       }
+      // Geschwindigkeit über Zeit plotten
+      if (results[i].speedCurve && Array.isArray(results[i].speedCurve) && results[i].speedCurve.length > 1) {
+        let canvasSpeed = document.createElement('canvas');
+        canvasSpeed.width = 320;
+        canvasSpeed.height = 140;
+        showSpeedPlot(results[i].speedCurve, canvasSpeed);
+        let labelSpeed = document.createElement('div');
+        labelSpeed.innerHTML = '<b>Geschwindigkeit</b>';
+        imgDiv.appendChild(labelSpeed);
+        imgDiv.appendChild(canvasSpeed);
+      }
     }
   });
 }
 
 // --- Messdatenerfassung ---
+// Geschwindigkeit über Zeit plotten
+function showSpeedPlot(data, canvas) {
+  let w = 320, h = 140, pad = 40;
+  canvas.width = w;
+  canvas.height = h;
+  canvas.style.marginTop = '1em';
+  let ctx = canvas.getContext('2d');
+  // Zeitbereich bestimmen
+  let tStart = data[0].t;
+  let tEnd = data[data.length-1].t;
+  // Wertebereich bestimmen
+  let vmin = Math.min(...data.map(d=>d.v));
+  let vmax = Math.max(...data.map(d=>d.v));
+  if (vmin === vmax) { vmin -= 1; vmax += 1; }
+  // y=0 (v=0) bestimmen
+  let y0 = h-pad - (h-2*pad) * ((0-vmin)/(vmax-vmin));
+  // --- Achsen zeichnen ---
+  ctx.strokeStyle = '#888';
+  ctx.lineWidth = 1.2;
+  ctx.beginPath();
+  // x-Achse (v=0)
+  ctx.moveTo(pad, y0);
+  ctx.lineTo(w-pad, y0);
+  // y-Achse
+  ctx.moveTo(pad, h-pad);
+  ctx.lineTo(pad, pad);
+  ctx.stroke();
+  // --- Achsenbeschriftungen ---
+  ctx.fillStyle = '#222';
+  ctx.font = '12px Segoe UI';
+  ctx.textAlign = 'center';
+  ctx.fillText('Zeit (s)', w-pad, h-4);
+  ctx.textAlign = 'left';
+  ctx.fillText('v (m/s)', pad-32, pad-8);
+  // --- Wertebereichsbeschriftung ---
+  ctx.fillStyle = '#444';
+  ctx.font = '12px Segoe UI';
+  ctx.textAlign = 'right';
+  ctx.fillText(vmin.toFixed(1), pad-5, h-pad);
+  ctx.fillText(vmax.toFixed(1), pad-5, pad+5);
+  // X-Achse Werte
+  ctx.textAlign = 'center';
+  ctx.font = '12px Segoe UI';
+  ctx.fillText((tStart).toFixed(2), pad, h-pad+15);
+  ctx.fillText((tEnd).toFixed(2), w-pad, h-pad+15);
+  // --- Plot der Geschwindigkeit ---
+  ctx.strokeStyle = '#0097e6';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < data.length-1; i++) {
+    let t0 = data[i].t, t1 = data[i+1].t;
+    let v0 = data[i].v, v1 = data[i+1].v;
+    let x0 = pad + (w-2*pad) * ((t0-tStart)/(tEnd-tStart));
+    let y0p = h-pad - (h-2*pad) * ((v0-vmin)/(vmax-vmin));
+    let x1 = pad + (w-2*pad) * ((t1-tStart)/(tEnd-tStart));
+    let y1p = h-pad - (h-2*pad) * ((v1-vmin)/(vmax-vmin));
+    ctx.moveTo(x0, y0p);
+    ctx.lineTo(x1, y1p);
+  }
+  ctx.stroke();
+}
 window.addEventListener('devicemotion', function(event) {
   // --- Immer aktuellen Beschleunigungswert berechnen und anzeigen ---
   let accRaw = useGravity ? event.accelerationIncludingGravity : event.acceleration;
@@ -334,8 +437,10 @@ window.addEventListener('devicemotion', function(event) {
     a = vec[dir] || 0;
   }
   let now = performance.now();
+  // GPS-Geschwindigkeit holen
+  let gpsSpeed = (window.lastGPSSpeed !== undefined && window.lastGPSSpeed !== null) ? window.lastGPSSpeed : null;
   // Buffer auf 1s begrenzen
-  accBuffer.push({t: now, relT: 0, a: a});
+  accBuffer.push({t: now, relT: 0, a: a, gpsSpeed: gpsSpeed});
   while (accBuffer.length > 0 && (now - accBuffer[0].t) > 1100) accBuffer.shift();
   // relT im Buffer aktualisieren (relativ zu jetzt)
   accBuffer.forEach(d => d.relT = (d.t - now) / 1000);
@@ -538,15 +643,18 @@ function processMeasurement() {
   let v0;
   if (typeof window.debugV0Override === 'number') {
     v0 = window.debugV0Override;
-    // Nach Auswertung wieder löschen
     setTimeout(()=>{window.debugV0Override=undefined;},0);
   } else {
-    v0 = 0;
-    for (let i = idx_beg-1; i >= 0; i--) {
-      let dt = plotData[i+1].t - plotData[i].t;
-      if (dt < 0) dt = 0;
-      v0 += Math.abs(plotData[i].a) * dt;
+    // Wert 0,5s vor Triggerpunkt 1 suchen
+    let t_v0 = plotData[idx_beg].t - 0.5;
+    let idx_v0 = 0;
+    for (let i = idx_beg; i >= 0; i--) {
+      if (plotData[i].t <= t_v0) {
+        idx_v0 = i;
+        break;
+      }
     }
+    v0 = speedCurve[idx_v0].v;
   }
 
   // Ungeglättet
@@ -653,7 +761,8 @@ results.unshift({
   vEnd: (resSmooth.v && resSmooth.v.length > 0 && typeof resSmooth.v[resSmooth.v.length-1] === 'number') ? resSmooth.v[resSmooth.v.length-1].toFixed(2) : '0.00',
   normBremsweg: resNorm.s.toFixed(2),
   normCurve: normCurve,
-  skalNorm: k.toFixed(3)
+  skalNorm: k.toFixed(3),
+  speedCurve: speedCurve
 });
   updateResultsList();
 }
@@ -941,6 +1050,8 @@ document.getElementById('exportBtn').onclick = function() {
   });
 };
 
+
+
 document.getElementById('calibBtn').onclick = function() {
   // Hole aktuelle Beschleunigung inkl. Gravitation
   let acc = window.lastAccInclGrav;
@@ -967,6 +1078,7 @@ let breakAccs = [];
 let breakGravAccs = [];
 let breakTimeout = null;
 document.getElementById('calibBreakBtn').onclick = function() {
+
   if (breakCalibState) return;
   breakCalibState = 'waitForAccel';
   breakAccs = [];
@@ -1052,6 +1164,7 @@ if ('geolocation' in navigator) {
   navigator.geolocation.watchPosition(function(pos) {
     if (pos.coords.speed != null) {
       let currentSpeed = Math.max(0, pos.coords.speed);
+      window.lastGPSSpeed = currentSpeed;
       document.getElementById('speed').innerHTML = `v: ${currentSpeed.toFixed(2)} m/s`;
     }
     if (pos.coords.latitude != null && pos.coords.longitude != null) {
