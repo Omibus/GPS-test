@@ -715,8 +715,8 @@ function processMeasurement() {
     });
     // Wert 0,5s vor Triggerpunkt 1 suchen
     let t_v0 = plotData[idx_beg].t - 0.5;
-    let idx_v0 = 0;
-    let actualV0Time = t_v0; // Die tatsächliche Zeit für v0 merken
+    idx_v0 = 0;
+    actualV0Time = t_v0; // Die tatsächliche Zeit für v0 merken
     for (let i = 0; i < speedCurveLocal.length; i++) {
       if (speedCurveLocal[i].t <= t_v0) {
         idx_v0 = i;
